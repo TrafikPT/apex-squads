@@ -15,6 +15,11 @@ export function openMatch(matchId: string): void {
 }
 
 const COLUMNS = 8;
+/** Matches rendered per "Show more" step; whole days are always shown. */
+const PAGE_SIZE = 100;
+let shown = PAGE_SIZE;
+/** The filters `shown` applies to: a new selection starts from one page again. */
+let shownFor = '';
 
 export function matchesView(ctx: ViewContext): ViewResult {
   const days = groupByDay(ctx.matches);
@@ -29,9 +34,20 @@ export function matchesView(ctx: ViewContext): ViewResult {
   const guns = groupBy(ctx.data.weapons, (w) => w.matchId);
   const accountName = new Map(ctx.data.accounts.map((a) => [a.accountKey, a.name]));
 
+  const filterKey = JSON.stringify(ctx.filters);
+  if (filterKey !== shownFor) {
+    shownFor = filterKey;
+    shown = PAGE_SIZE;
+  }
+  const openAt = days.flatMap((d) => d.matches).findIndex((m) => m.matchId === expanded);
+  const limit = Math.max(shown, openAt + 1);
+
   const body = el('tbody', {});
   let expandedRow: HTMLElement | null = null;
+  let rendered = 0;
   for (const day of days) {
+    if (rendered >= limit) break;
+    rendered += day.matches.length;
     const s = day.summary;
     body.append(el('tr', { class: 'day-row' }, el('td', { colspan: String(COLUMNS) },
       el('span', { class: 'day-name' }, fmtLongDay(day.day)),
@@ -56,7 +72,18 @@ export function matchesView(ctx: ViewContext): ViewResult {
     ['K / A / Kn', true], ['Damage', true], ['RP', true]] as const) {
     head.append(el('th', { class: num ? 'num' : '' }, label));
   }
-  card.append(el('div', { class: 'table-scroll' }, el('table', { class: 'matches-table' }, el('thead', {}, head), body)));
+  const scroll = el('div', { class: 'table-scroll' }, el('table', { class: 'matches-table' }, el('thead', {}, head), body));
+  const remaining = ctx.matches.length - rendered;
+  if (remaining > 0) {
+    const more = el('button', { type: 'button', class: 'link-button show-more' },
+      `Show ${fmtInt(Math.min(remaining, PAGE_SIZE))} more (${fmtInt(remaining)} left)`);
+    more.addEventListener('click', () => {
+      shown = rendered + PAGE_SIZE;
+      ctx.setView('matches');
+    });
+    scroll.append(more);
+  }
+  card.append(scroll);
   return {
     node: el('div', { class: 'view view-matches' }, card),
     mounted: () => expandedRow?.scrollIntoView({ block: 'nearest' }),
@@ -160,7 +187,6 @@ function section(title: string, ...children: (HTMLElement | string)[]): HTMLElem
 }
 
 // ---------------------------------------------------------------- helpers
-
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 

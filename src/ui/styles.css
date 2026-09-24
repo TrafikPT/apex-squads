@@ -170,6 +170,7 @@ select, input[type="date"] {
 /* ---------------------------------------------------------- tables */
 .table-card { display: flex; flex-direction: column; min-height: 0; padding-bottom: 6px; }
 .table-scroll { overflow: auto; min-height: 0; margin: 0 -16px; padding: 0 16px; }
+.show-more { display: block; margin: 12px auto 6px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th {
   position: sticky; top: 0; background: var(--surface); z-index: 1;
