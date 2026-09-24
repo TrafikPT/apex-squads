@@ -198,6 +198,20 @@ What each `kind` carries:
 - `lifecycle`: session start/end, package ready or failed, game detected or
   exited, features registered, GEP errors. This is the recorder's health log.
 
+**Schema versions.** `schema` changes only when the envelope fields above
+change meaning or shape. New `kind`s, new GEP features and new payload shapes
+don't need a bump, because payloads are stored as received. When it does change:
+1. Old files are never rewritten; recordings are immutable.
+2. Adding a field: add it to the `columns` map in `sql/bronze.sql`. Older files
+   read it as NULL.
+3. Renaming or retyping a field: `bronze_lines` maps every older version to
+   the current shape (`CASE schema ...`), so silver only ever sees one shape.
+4. Add a row to the table below.
+
+| Schema | Since | Change |
+|---|---|---|
+| 1 | 2026-09 | Initial format |
+
 The lines have no account column on purpose. They stay what GEP sent, and
 the account is derived per match in silver (from the `me` and `roster` lines
 inside the match). RP snapshots carry `player_name`, the name the API was
@@ -287,7 +301,7 @@ WHERE is_ranked AND date >= date_trunc('month', current_date);
 | Headshot % | `damage.headshot` | Headshot hits / all hits | High |
 | Legend | `legendSelect_X` where the local flag is true | — | High |
 | Placement / win | `match_summary`, `rank.victory` | — | High |
-| Kills/knocks per weapon | `kill_feed`, attacker = me | `weaponName` as given | High (needs Obituaries on) |
+| Kills/knocks per weapon | `kill_feed`, attacker = me | `weaponName` as given | High (needs Obituaries on: Settings → Gameplay → Obituaries) |
 | **Damage per weapon** | `damage` + `s_weapon_timeline` | Weapon = latest `inUse` before the hit (DuckDB `ASOF JOIN` on `seq`). `grenade=true` → "Grenade". An `inUse` that isn't a weapon → "Other". | **Medium**, an estimate |
 | **Loadout** | per-weapon damage per match | The match's two highest-damage guns (grenades/abilities ignored), shown in class order. Simple on purpose: mid-match swaps count toward whichever two guns were used most. Later option: the two guns held longest, from `inventory.weapons` + `inUse`. | Medium |
 | **Comp** | my legend + both teammates' `legendSelect` | The set of 3 legends, whoever played which. **Full premades only** (both teammates are regulars). Team kills = mine + teammates' from the kill feed; team K/D = team kills / team deaths (teammate deaths from the kill feed). RP is only mine. Team damage needs the summary-screen OCR (§11). | High, except team damage (n/a under GEP) |
@@ -362,6 +376,11 @@ for comparison), and answer:
 10. Teammates: does `roster` give each teammate a stable ID, and is it
     present for randoms as well as friends? Does the kill feed include
     every kill in the lobby, so teammates' kills are countable?
+11. Location: how often does `location` update, and does it work in ranked?
+    Record `landed` and death positions on each map played. Needed for the
+    Maps tab (§12).
+12. Obituaries: confirm the setting's menu path and default, and that turning
+    it off stops `kill_feed` (so the app can detect it and warn).
 
 Answers go into §9 of this document.
 
@@ -374,7 +393,7 @@ Answers go into §9 of this document.
 | 0. Setup | Overwolf app proposal (https://dev.overwolf.com/app-idea-form/) and approval → Dev Console API key. apexlegendsstatus API key. Windows: Node 22.12+, Git. | 1 evening + **waiting for Overwolf approval** |
 | 1. Recorder spike | ~~Build the recorder~~ (done: `src/`, 10 tests passing, untested against the real game). Run it on Windows and play ~10 ranked matches. | Play time |
 | 2. PoC stats | Silver/gold views, validated against in-game summaries | 1–2 weekends |
-| 3. UI | Dashboard window + in-game overlay. **Dashboard done on sample data (2026-09-24):** Overview, Squads, Matches (expandable details), Legends, Weapons, sharing one filter bar; `npm run app:preview`. Still to do: Settings, overlay, real data source. | 2–3 weekends |
+| 3. UI | Dashboard window + in-game overlay. **Dashboard done on sample data (2026-09-24):** Overview, Squads, Matches (expandable details), Legends, Weapons, sharing one filter bar; `npm run app:preview`. Still to do: Settings, overlay, real data source, and the backlog in §12. | 2–3 weekends |
 
 Workflow: code on the Mac → push to a private GitHub repo → pull on Windows
 to run. Recorded JSONL files come back to the Mac (copied into `recordings/`,
@@ -510,3 +529,61 @@ Plus your resolution, HUD scale and display mode.
 
 Rough reuse if Overwolf approves later: ~70%. OCR-period players are keyed by
 name and GEP players by platform ID; they are linked with "merge players".
+
+---
+
+## 12. Dashboard backlog (agreed 2026-09-24)
+
+### Rules for every feature
+The dashboard has to stay focused, so a feature that adds nothing is easy to
+remove:
+- **One feature = one module.** A tab is one entry in `NAV` and one view
+  file; an Overview card is one entry in a card list and one function.
+  Removing a feature is deleting a line and a file.
+- **Conditional cards.** An insight card appears only when it has something
+  to say; otherwise it takes no space.
+- **Show sample size.** Every rate or average shows its *n*, and numbers
+  below a minimum sample are faded. One player's data, sliced by legend,
+  teammate and map, gets small fast.
+- Only high-confidence stats. Medium-confidence ones (damage per weapon) are
+  labelled as estimates.
+
+### Planned
+| Where | Feature |
+|---|---|
+| Overview | RP line chart over the season (replaces the static rank badge), with "games to next rank" at the current RP per game |
+| Overview | "Best / worst game of the week" card (conditional) |
+| Matches | Group by play session (a gap of N hours, not the calendar day, so late nights stay together), with net RP per session |
+| Squads | Support stats: knocked squadmates revived vs lost, how often I get picked up, how many knocks become kills (mine or the squad's) |
+| Weapons | Personal tier list: kills per match with the gun and damage share, normalised for games played. Not win rate: guns held late in a match correlate with surviving |
+| Sharing | Recap PNG for a session or week. Friends' names shown, randoms masked |
+| Settings | Diagnostics: recent `lifecycle` errors, GEP feature status |
+| Settings | Obituaries check: warn when a match has no `kill_feed` lines |
+| Settings | Choose the recordings folder (e.g. a OneDrive folder, for backup and several PCs). `main.ts` already reads `APEX_TRACKER_DATA_DIR` |
+| Settings | CSV export of the gold facts |
+
+### After the spike (needs `location`, §7 Q11)
+- **Maps** tab: map picker (defaults to the current ranked map) with layer
+  toggles instead of subtabs: **Deaths** (dots, not a smoothed heatmap, at
+  personal sample sizes) and **Drops** (position at `landed`, crossed with
+  placement). Needs map images, whose use has to be cleared like the
+  portraits (§10), and a game-coordinates → image transform for each map
+  version.
+- Match details: a timeline strip (knocks, deaths, revives) and the route
+  through that match on the map.
+- Not available under Plan B (OCR has no position data).
+
+### Decided against
+| Idea | Why not |
+|---|---|
+| Tilt, time-of-day and day-of-week breakdowns; calendar heatmap | Not wanted; information overload |
+| Comp win-rate matrix, "squad chemistry" score, teammate card in the overlay | Samples too small (hundreds of trios; randoms met once) |
+| RP breakdown (entry cost / placement / kills) | The API's RP delta already tells the story; the formula changes every season |
+| Placement histogram | Avg placement and Top 5 % already cover it |
+| Fight/engagement detection | Only medium confidence: GEP has no damage-taken events |
+| Ring discipline | Hard to read, hard to act on |
+| Goal tracking | Settings UI and state for little value; "games to next rank" covers the main goal |
+| SQL console | Almost no user would query the data; CSV export covers it |
+| Scheduled job to fetch new legend portraits | New legends come about 4 times a year; a wiki scraper breaks silently. The app already shows a short code when a portrait is missing; rerun the script by hand |
+| Silver/gold SQL before the spike | Would be written against guessed payloads. `src/ui/facts.ts` is the gold contract meanwhile |
+| Prettier | Would reformat the hand-laid-out `el(...)` trees in the UI. ESLint + `.editorconfig` only |
