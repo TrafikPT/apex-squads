@@ -48,6 +48,8 @@ export interface TeammateFact {
   legend: string;
   kills: number;
   knocks: number;
+  /** From the kill feed (victim = teammate). */
+  deaths: number;
 }
 
 /**

@@ -288,3 +288,6 @@ th.sortable:focus-visible { outline: 1px solid var(--accent); outline-offset: -2
 .gun { display: inline-flex; align-items: center; gap: 6px; }
 .gun .swatch { width: 8px; height: 8px; }
 .plus { color: var(--text-muted); }
+.comp-insight .faces { margin: 6px 0 2px; }
+.comp-insight .faces .legend-badge { width: 32px; height: 32px; }
+.comp-names { color: var(--text-secondary); font-size: 13px; }

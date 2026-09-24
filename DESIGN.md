@@ -24,6 +24,8 @@ RP, broken down per match, per legend and per weapon.
     knocks per game when playing with me;
   - my placement, kills and damage when I play with one specific friend, or
     with a specific pair of friends (a full premade squad).
+- **Comps** (suggested by a friend): stats per 3-legend composition in full
+  premades, to answer "is this comp working?"
 - **Filters that combine freely** on every view: time period (last 7/30
   days, season, custom range), legend, teammate(s), account, map, mode. For
   example: "last 30 days, as Bangalore, with friend X".
@@ -288,6 +290,7 @@ WHERE is_ranked AND date >= date_trunc('month', current_date);
 | Kills/knocks per weapon | `kill_feed`, attacker = me | `weaponName` as given | High (needs Obituaries on) |
 | **Damage per weapon** | `damage` + `s_weapon_timeline` | Weapon = latest `inUse` before the hit (DuckDB `ASOF JOIN` on `seq`). `grenade=true` → "Grenade". An `inUse` that isn't a weapon → "Other". | **Medium**, an estimate |
 | **Loadout** | per-weapon damage per match | The match's two highest-damage guns (grenades/abilities ignored), shown in class order. Simple on purpose: mid-match swaps count toward whichever two guns were used most. Later option: the two guns held longest, from `inventory.weapons` + `inUse`. | Medium |
+| **Comp** | my legend + both teammates' `legendSelect` | The set of 3 legends, whoever played which. **Full premades only** (both teammates are regulars). Team kills = mine + teammates' from the kill feed; team K/D = team kills / team deaths (teammate deaths from the kill feed). RP is only mine. Team damage needs the summary-screen OCR (§11). | High, except team damage (n/a under GEP) |
 | Revives received | `revive.healed_from_ko` | Count | High |
 | Respawned | `revive.respawn` | Count | High |
 | **Revives given** | `player_stats_br_ranked_latest.teammates_revived` | Difference between the last snapshot before the match and the first one after it | Depends on refresh timing (spike Q7) |

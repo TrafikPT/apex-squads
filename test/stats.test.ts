@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Dataset, MatchFact } from '../src/ui/facts';
 import { generateMockData } from '../src/ui/mock-data';
-import { DEFAULT_FILTERS, filterMatches, groupByDay, kpis, legendStats, loadoutStats, matchLoadout, regularPlayers, rpByDay, squadStats, teammateStats, weaponStats } from '../src/ui/stats';
+import { compStats, DEFAULT_FILTERS, filterMatches, groupByDay, kpis, legendStats, loadoutStats, matchLoadout, regularPlayers, rpByDay, squadStats, teammateStats, weaponStats } from '../src/ui/stats';
 import { weaponClass } from '../src/ui/weapons';
 
 const NOW = new Date(2026, 8, 24, 23, 0); // 24 Sep 2026, local time
@@ -18,7 +18,7 @@ function match(id: string, startedAt: Date, patch: Partial<MatchFact> = {}): Mat
 function dataset(matches: MatchFact[], mates: [string, string, number?, string?][] = []): Dataset {
   return {
     accounts: [], players: [], matches, weapons: [], seasonStart: '2026-08-01',
-    teammates: mates.map(([matchId, playerKey, kills = 1, legend = 'Wraith']) => ({ matchId, playerKey, legend, kills, knocks: kills })),
+    teammates: mates.map(([matchId, playerKey, kills = 1, legend = 'Wraith']) => ({ matchId, playerKey, legend, kills, knocks: kills, deaths: 1 })),
   };
 }
 
@@ -241,4 +241,29 @@ test('loadoutStats groups matches by loadout with my numbers', () => {
   const rows = loadoutStats(data, data.matches, 1);
   assert.deepEqual(rows.map((r) => [r.weapons.join('+'), r.games]), [['R-99+Peacekeeper', 2], ['Kraber', 1]]);
   assert.equal(rows[0].me.kd, 3);
+});
+
+test('compStats: full premades only, legends as a set, team kills and K/D', () => {
+  const d = new Date(2026, 8, 20);
+  const data = dataset(
+    [
+      match('p1', d, { legend: 'Bangalore', kills: 3, deaths: 1, placement: 2 }),
+      match('p2', d, { legend: 'Gibraltar', kills: 1, deaths: 1, placement: 4 }),
+      match('rnd', d, { legend: 'Bangalore', kills: 9, deaths: 0 }),
+    ],
+    [
+      ['p1', 'A', 2, 'Gibraltar'], ['p1', 'B', 1, 'Wraith'],
+      // Same three legends, different owners: still the same comp.
+      ['p2', 'A', 4, 'Bangalore'], ['p2', 'B', 0, 'Wraith'],
+      ['rnd', 'A', 1, 'Gibraltar'], ['rnd', 'R', 1, 'Wraith'],
+    ],
+  );
+  const rows = compStats(data, data.matches, new Set(['A', 'B']), 1);
+  assert.equal(rows.length, 1, 'the match with a random is not a premade');
+  const [c] = rows;
+  assert.deepEqual(c.legends, ['Bangalore', 'Gibraltar', 'Wraith']);
+  assert.equal(c.games, 2);
+  assert.equal(c.teamKillsPerMatch, (3 + 2 + 1 + 1 + 4 + 0) / 2);
+  assert.equal(c.teamKd, 11 / 6, 'each teammate died once per match in the fixture');
+  assert.equal(c.me.avgPlacement, 3);
 });

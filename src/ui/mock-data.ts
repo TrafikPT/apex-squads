@@ -108,7 +108,10 @@ export function generateMockData(now = new Date(), seed = 7): Dataset {
       t += (14 + rnd() * 12) * 60_000;
       if (t > now.getTime()) break;
       const mode = rnd() < 0.85 ? 'ranked' : 'pubs';
-      const legend = weighted(MY_LEGENDS);
+      // In a full premade I mostly stick to my comp legends; otherwise anything goes.
+      const legend = squad.friends.length === 2 && rnd() < 0.75
+        ? weighted<string>([['Bangalore', 5], ['Bloodhound', 3], ['Pathfinder', 2]])
+        : weighted(MY_LEGENDS);
       const skill = squad.skill * (account.accountKey === 'acc-smurf' ? 0.8 : 1);
       const placement = Math.min(20, Math.max(1, Math.round(1 + Math.abs(normal(rnd)) * 9 * skill)));
       const survived = (21 - placement) / 20; // 0..1, longer games → more fights
@@ -134,6 +137,7 @@ export function generateMockData(now = new Date(), seed = 7): Dataset {
           legend: favourites.length && rnd() < 0.8 ? pick(favourites) : pick(mateLegends),
           kills: mk,
           knocks: mk + poisson(0.6),
+          deaths: placement === 1 && rnd() < 0.8 ? 0 : 1 + (rnd() < 0.12 ? 1 : 0),
         });
       }
 

@@ -2,7 +2,7 @@
  * Filtering and aggregation over gold facts. Pure functions, so they're unit
  * tested and reused unchanged when real data replaces the mock.
  */
-import type { Dataset, MatchFact, Mode } from './facts';
+import type { Dataset, MatchFact, Mode, TeammateFact } from './facts';
 import { OTHER_WEAPON, WEAPON_CLASSES, weaponClass } from './weapons';
 
 export type PeriodPreset = '7d' | '30d' | '90d' | 'season' | 'all' | 'custom';
@@ -364,5 +364,52 @@ export function loadoutStats(data: Dataset, matches: MatchFact[], minGames = 3):
   return [...groups]
     .filter(([, g]) => g.length >= minGames)
     .map(([key, g]) => ({ weapons: key.split('|'), games: g.length, me: kpis(g) }))
+    .sort((a, b) => b.games - a.games);
+}
+
+// ---------------------------------------------------------------- comps
+
+export interface CompRow {
+  /** The three legends, alphabetical (who played what doesn't matter). */
+  legends: string[];
+  games: number;
+  /** Squad-level numbers: me + both teammates. */
+  teamKillsPerMatch: number;
+  teamKd: number;
+  /** My numbers (placement is the squad's; RP is only mine). */
+  me: Kpis;
+}
+
+/**
+ * Stats per three-legend comp, from full premades only (both teammates are
+ * regulars): that's when a squad deliberately runs a comp for a few games.
+ */
+export function compStats(data: Dataset, matches: MatchFact[], regulars: Set<string>, minGames = 3): CompRow[] {
+  const mates = new Map<string, TeammateFact[]>();
+  for (const t of data.teammates) {
+    let list = mates.get(t.matchId);
+    if (!list) mates.set(t.matchId, (list = []));
+    list.push(t);
+  }
+  const groups = new Map<string, { matches: MatchFact[]; kills: number; deaths: number }>();
+  for (const m of matches) {
+    const squad = mates.get(m.matchId) ?? [];
+    if (squad.length !== 2 || !squad.every((t) => regulars.has(t.playerKey))) continue;
+    const key = [m.legend, ...squad.map((t) => t.legend)].sort().join('|');
+    let g = groups.get(key);
+    if (!g) groups.set(key, (g = { matches: [], kills: 0, deaths: 0 }));
+    g.matches.push(m);
+    g.kills += m.kills + squad.reduce((s, t) => s + t.kills, 0);
+    g.deaths += m.deaths + squad.reduce((s, t) => s + t.deaths, 0);
+  }
+  return [...groups]
+    .filter(([, g]) => g.matches.length >= minGames)
+    .map(([key, g]) => ({
+      legends: key.split('|'),
+      games: g.matches.length,
+      teamKillsPerMatch: g.kills / g.matches.length,
+      teamKd: g.kills / Math.max(g.deaths, 1),
+      me: kpis(g.matches),
+    }))
     .sort((a, b) => b.games - a.games);
 }

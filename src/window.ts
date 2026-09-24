@@ -25,10 +25,12 @@ export function createMainWindow(): BrowserWindow {
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
 
-  // APEX_UI_VIEW opens a specific screen (dev aid, handy with APEX_UI_SCREENSHOT).
-  const query: Record<string, string> = { platform: process.platform };
-  if (process.env.APEX_UI_VIEW) query.view = process.env.APEX_UI_VIEW;
-  if (process.env.APEX_UI_MATCH) query.match = process.env.APEX_UI_MATCH;
+  // Dev aid, handy with APEX_UI_SCREENSHOT: APEX_UI_QUERY="view=squads&squads=comps"
+  // opens a specific screen/state (see the query params read in src/ui).
+  const query: Record<string, string> = {
+    ...Object.fromEntries(new URLSearchParams(process.env.APEX_UI_QUERY ?? '')),
+    platform: process.platform,
+  };
   win.loadFile(path.join(__dirname, '..', 'ui', 'index.html'), { query });
   win.once('ready-to-show', () => win.show());
 

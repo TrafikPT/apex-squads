@@ -4,29 +4,65 @@ import { el } from '../dom';
 const TEAMMATE_SLOTS = 2;
 import { fixed, pct, place, signed } from '../format';
 import { legendBadge } from '../portraits';
-import { kpis, Kpis, squadStats, SquadRow, teammateStats, TeammateRow } from '../stats';
+import { compStats, CompRow, kpis, Kpis, squadStats, SquadRow, teammateStats, TeammateRow } from '../stats';
 import type { ViewContext, ViewResult } from './context';
-import { clickable, damageText, headRow, rpCell, rpPerMatch, vsAverage } from './shared';
+import { clickable, damageText, headRow, rpCell, rpPerMatch, SortColumn, sortableHead, sortRows, SortState, vsAverage } from './shared';
 
 /** Minimum games before a squad or teammate can be called "best". */
 const MIN_GAMES_FOR_BEST = 5;
 
+const COMP_COLUMNS: SortColumn<CompRow>[] = [
+  { label: 'Comp' },
+  { label: 'Games', value: (r) => r.games, better: 'high' },
+  { label: 'Avg place', value: (r) => r.me.avgPlacement, better: 'low' },
+  { label: 'vs avg', value: (r) => r.me.avgPlacement, better: 'low' },
+  { label: 'Wins', value: (r) => r.me.winRate, better: 'high' },
+  { label: 'Top 5', value: (r) => r.me.top5Rate, better: 'high' },
+  { label: 'Team kills', value: (r) => r.teamKillsPerMatch, better: 'high' },
+  { label: 'Team K/D', value: (r) => r.teamKd, better: 'high' },
+  { label: 'Your RP/match', value: (r) => rpPerMatch(r.me), better: 'high' },
+];
+
+// View state kept across re-renders.
+let mode: 'squads' | 'comps' = new URLSearchParams(location.search).get('squads') === 'comps' ? 'comps' : 'squads';
+let compSort: SortState = { column: 1, direction: 'desc' };
+
 export function squadsView(ctx: ViewContext): ViewResult {
   const baseline = kpis(ctx.matches);
-  const squads = squadStats(ctx.data, ctx.matches, ctx.regulars);
   const mates = teammateStats(ctx.data, ctx.matches, ctx.regulars);
-  // A friend's portrait is the legend they play most with me, across all history.
-  const topLegend = new Map(teammateStats(ctx.data, ctx.data.matches, ctx.regulars, 1).map((t) => [t.playerKey, t.topLegend]));
-
+  let top: HTMLElement;
+  let highlights: HTMLElement;
+  if (mode === 'comps') {
+    const comps = compStats(ctx.data, ctx.matches, ctx.regulars);
+    highlights = compInsights(comps);
+    top = compsCard(ctx, comps, baseline);
+  } else {
+    const squads = squadStats(ctx.data, ctx.matches, ctx.regulars);
+    // A friend's portrait is the legend they play most with me, across all history.
+    const topLegend = new Map(teammateStats(ctx.data, ctx.data.matches, ctx.regulars, 1).map((t) => [t.playerKey, t.topLegend]));
+    highlights = insights(ctx, squads, mates);
+    top = squadsCard(ctx, squads, baseline, topLegend);
+  }
   return {
     node: el('div', { class: 'view view-squads' },
-      insights(ctx, squads, mates),
-      el('div', { class: 'squads-grid' },
-        squadsCard(ctx, squads, baseline, topLegend),
-        teammatesCard(ctx, mates, baseline),
-      ),
+      highlights,
+      el('div', { class: 'squads-grid' }, top, teammatesCard(ctx, mates, baseline)),
     ),
   };
+}
+
+/** Card title with the Squads / Comps switch. */
+function modeTitle(ctx: ViewContext, aside: string): HTMLElement {
+  const toggle = el('div', { class: 'segmented small', role: 'group', 'aria-label': 'Group by' });
+  for (const [value, label] of [['squads', 'Squads'], ['comps', 'Comps']] as const) {
+    const b = el('button', { type: 'button', 'aria-pressed': String(mode === value) }, label);
+    b.addEventListener('click', () => {
+      mode = value;
+      ctx.setView('squads');
+    });
+    toggle.append(b);
+  }
+  return el('h2', { class: 'card-title' }, toggle, el('span', { class: 'aside' }, aside));
 }
 
 // ---------------------------------------------------------------- insights
@@ -60,8 +96,7 @@ function insights(ctx: ViewContext, squads: SquadRow[], mates: TeammateRow[]): H
 // ---------------------------------------------------------------- squads table
 
 function squadsCard(ctx: ViewContext, squads: SquadRow[], baseline: Kpis, topLegend: Map<string, string>): HTMLElement {
-  const card = el('section', { class: 'card table-card' },
-    el('h2', { class: 'card-title' }, 'Squads', el('span', { class: 'aside' }, 'who you queued with')));
+  const card = el('section', { class: 'card table-card' }, modeTitle(ctx, 'who you queued with'));
   if (!squads.length) {
     card.append(el('div', { class: 'empty' }, 'No squad with 3+ games in this selection'));
     return card;
@@ -133,4 +168,61 @@ function squadName(ctx: ViewContext, friends: string[]): string {
   if (!friends.length) return 'Solo queue';
   const names = friends.map((f) => ctx.playerName(f));
   return friends.length === 1 ? `${names[0]} + random` : names.join(' + ');
+}
+
+// ---------------------------------------------------------------- comps
+
+function compFaces(legends: string[]): HTMLElement {
+  const faces = el('span', { class: 'faces' });
+  for (const l of legends) faces.append(legendBadge(l));
+  return faces;
+}
+
+function compInsights(comps: CompRow[]): HTMLElement {
+  const eligible = comps.filter((c) => c.games >= MIN_GAMES_FOR_BEST);
+  const best = (value: (c: CompRow) => number | null, better: 'high' | 'low') =>
+    eligible.filter((c) => value(c) !== null)
+      .sort((a, b) => (better === 'high' ? value(b)! - value(a)! : value(a)! - value(b)!))[0];
+  const tile = (label: string, comp: CompRow | undefined, sub: (c: CompRow) => string, empty: string) =>
+    el('div', { class: 'tile insight comp-insight' },
+      el('div', { class: 'label' }, label),
+      comp ? compFaces(comp.legends) : el('div', { class: 'value' }, '–'),
+      el('div', { class: 'sub' }, comp ? sub(comp) : empty));
+  const need = `needs ${MIN_GAMES_FOR_BEST}+ premade games with a comp`;
+  const mostPlayed = comps[0];
+  return el('div', { class: 'insights' },
+    tile('Most played comp', mostPlayed, (c) => `${c.games} games`, 'no comp with 3+ premade games'),
+    tile('Best placement', best((c) => c.me.avgPlacement, 'low'), (c) => `${place(c.me.avgPlacement)} avg · ${c.games} games`, need),
+    tile('Best team K/D', best((c) => c.teamKd, 'high'), (c) => `${c.teamKd.toFixed(2)} team K/D · ${c.games} games`, need),
+    tile('Best for your RP', best((c) => rpPerMatch(c.me), 'high'), (c) => `${signed(rpPerMatch(c.me)!)} RP per match · ${c.games} games`, need),
+  );
+}
+
+function compsCard(ctx: ViewContext, comps: CompRow[], baseline: Kpis): HTMLElement {
+  const card = el('section', { class: 'card table-card' },
+    modeTitle(ctx, 'full premades only · RP is yours · team damage needs the summary-screen data'));
+  if (!comps.length) {
+    card.append(el('div', { class: 'empty' }, 'No comp with 3+ full-premade games in this selection'));
+    return card;
+  }
+  const head = sortableHead(COMP_COLUMNS, compSort, (next) => {
+    compSort = next;
+    ctx.setView('squads');
+  });
+  const body = el('tbody', {});
+  for (const c of sortRows(comps, COMP_COLUMNS, compSort)) {
+    body.append(el('tr', {},
+      el('td', {}, el('div', { class: 'who' }, compFaces(c.legends), el('span', { class: 'comp-names' }, c.legends.join(' · ')))),
+      el('td', { class: 'num' }, String(c.games)),
+      el('td', { class: 'num' }, place(c.me.avgPlacement)),
+      vsAverage(baseline, c.me),
+      el('td', { class: 'num' }, pct(c.me.winRate)),
+      el('td', { class: 'num' }, pct(c.me.top5Rate)),
+      el('td', { class: 'num' }, c.teamKillsPerMatch.toFixed(1)),
+      el('td', { class: 'num' }, c.teamKd.toFixed(2)),
+      rpCell(rpPerMatch(c.me)),
+    ));
+  }
+  card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)));
+  return card;
 }
