@@ -3,14 +3,19 @@
  * before real recordings exist. Numbers are plausible, not realistic.
  */
 import type { Account, Dataset, MatchFact, Player, TeammateFact, WeaponFact } from './facts';
+import { rankOf } from './ranks';
 
 const DAY_MS = 86_400_000;
 
 const ACCOUNTS: Account[] = [
-  { accountKey: 'acc-main', alias: 'Main', name: 'NightOwl_PT', rank: { tier: 'Diamond', division: 3, rp: 11_240 } },
-  { accountKey: 'acc-alt', alias: 'Alt', name: 'OwlAlt', rank: { tier: 'Platinum', division: 1, rp: 9_480 } },
-  { accountKey: 'acc-smurf', alias: 'Smurf', name: 'quietfeathers', rank: { tier: 'Gold', division: 2, rp: 5_310 } },
+  { accountKey: 'acc-main', alias: 'Main', name: 'NightOwl_PT' },
+  { accountKey: 'acc-alt', alias: 'Alt', name: 'OwlAlt' },
+  { accountKey: 'acc-smurf', alias: 'Smurf', name: 'quietfeathers' },
 ];
+/** RP when the history starts; each account climbs from there. */
+const START_RP: Record<string, number> = { 'acc-main': 6_000, 'acc-alt': 4_500, 'acc-smurf': 2_000 };
+/** At the season start RP drops to this share (a soft reset). */
+const SEASON_RESET = 0.6;
 
 const FRIENDS: Player[] = [
   { playerKey: 'p-rook', name: 'Rook' },
@@ -94,6 +99,9 @@ export function generateMockData(now = new Date(), seed = 7): Dataset {
   const weapons: WeaponFact[] = [];
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const days = 120;
+  const seasonStart = today - 50 * DAY_MS;
+  const rp = new Map(Object.entries(START_RP));
+  const resetDone = new Set<string>();
 
   for (let d = days; d >= 0; d--) {
     if (rnd() > 0.55) continue; // not every day is a play day
@@ -155,9 +163,17 @@ export function generateMockData(now = new Date(), seed = 7): Dataset {
       if (other) weapons.push({ matchId, weapon: 'Other', kills: 0, knocks: 0, damage: other });
 
       let rpDelta: number | null = null;
+      let rpAfter: number | null = null;
       if (mode === 'ranked') {
         rpDelta = ENTRY_COST + (PLACEMENT_RP[placement - 1] ?? 0) +
           Math.min(kills + assists, KP_CAP) * RP_PER_KILL;
+        let level = rp.get(account.accountKey)!;
+        if (t >= seasonStart && !resetDone.has(account.accountKey)) {
+          resetDone.add(account.accountKey);
+          level = Math.round(level * SEASON_RESET);
+        }
+        rpAfter = Math.max(0, level + rpDelta);
+        rp.set(account.accountKey, rpAfter);
       }
 
       matches.push({
@@ -177,18 +193,22 @@ export function generateMockData(now = new Date(), seed = 7): Dataset {
         revivesGiven: poisson(0.5),
         revivesReceived: poisson(0.4),
         rpDelta,
+        rpAfter,
         squadKey: mates.map((m) => m.playerKey).sort().join('|'),
       });
     }
   }
 
   return {
-    accounts: ACCOUNTS,
+    accounts: ACCOUNTS.map((a) => {
+      const r = rankOf(rp.get(a.accountKey)!);
+      return { ...a, rank: { tier: r.tier, division: r.division, rp: rp.get(a.accountKey)! } };
+    }),
     players,
     matches,
     teammates,
     weapons,
-    seasonStart: new Date(today - 50 * DAY_MS).toISOString().slice(0, 10),
+    seasonStart: new Date(seasonStart).toISOString().slice(0, 10),
   };
 }
 

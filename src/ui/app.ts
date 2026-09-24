@@ -12,6 +12,7 @@ import { el, svgEl } from './dom';
 import type { Account, Dataset } from './facts';
 import { uniqueSorted } from './format';
 import { generateMockData } from './mock-data';
+import { rankName } from './ranks';
 import { DEFAULT_FILTERS, Filters, PeriodPreset, filterMatches, frequentTeammates, regularPlayers, teammateIndex } from './stats';
 import type { View, ViewContext, ViewResult } from './views/context';
 import { legendsView } from './views/legends';
@@ -212,7 +213,7 @@ function selectFilter(label: string, options: [string, string][], value: string,
 }
 
 function rankText(a: Account): string {
-  return a.rank ? `${a.rank.tier} ${a.rank.division}` : '–';
+  return a.rank ? rankName(a.rank.tier, a.rank.division) : '–';
 }
 
 render();

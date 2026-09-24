@@ -3,10 +3,8 @@ import { fixed, fmtInt, pct, place, signed } from '../format';
 import { legendBadge } from '../portraits';
 import { kpis, Kpis, legendStats, LegendRow } from '../stats';
 import type { ViewContext, ViewResult } from './context';
-import { clickable, damageText, rpCell, rpPerMatch, SortColumn, sortableHead, sortRows, SortState, vsAverage } from './shared';
-
-/** Minimum games before a legend can be called "best" at something. */
-const MIN_GAMES_FOR_BEST = 5;
+import { clickable, damageText, markSample, MIN_SAMPLE, rpCell, rpPerMatch, sampleNote, SortColumn, sortableHead, sortRows, SortState,
+  vsAverage } from './shared';
 
 const COLUMNS: SortColumn<LegendRow>[] = [
   { label: 'Legend' },
@@ -37,7 +35,7 @@ export function legendsView(ctx: ViewContext): ViewResult {
 // ---------------------------------------------------------------- insights
 
 function insights(rows: LegendRow[]): HTMLElement {
-  const eligible = rows.filter((r) => r.games >= MIN_GAMES_FOR_BEST);
+  const eligible = rows.filter((r) => r.games >= MIN_SAMPLE);
   const best = (value: (r: LegendRow) => number | null, better: 'high' | 'low') =>
     eligible
       .filter((r) => value(r) !== null)
@@ -53,7 +51,7 @@ function insights(rows: LegendRow[]): HTMLElement {
       ),
     );
 
-  const need = `needs ${MIN_GAMES_FOR_BEST}+ games on a legend`;
+  const need = `needs ${MIN_SAMPLE}+ games on a legend`;
   return el('div', { class: 'insights' },
     tile('Most played', rows[0], (r) => `${r.games} games · ${pct(r.pickRate)} of matches`, 'no matches yet'),
     tile('Best placement', best((r) => r.me.avgPlacement, 'low'), (r) => `${place(r.me.avgPlacement)} avg · ${r.games} games`, need),
@@ -80,6 +78,7 @@ function legendsCard(ctx: ViewContext, rows: LegendRow[], baseline: Kpis): HTMLE
   });
 
   const body = el('tbody', {});
+  let faded = false;
   for (const r of sorted) {
     const row = el('tr', {},
       el('td', {}, el('div', { class: 'who' }, legendBadge(r.legend), el('span', { class: 'legend-name' }, r.legend))),
@@ -95,9 +94,10 @@ function legendsCard(ctx: ViewContext, rows: LegendRow[], baseline: Kpis): HTMLE
       el('td', { class: 'num' }, damageText(r.me)),
       rpCell(rpPerMatch(r.me)),
     );
+    faded = markSample(row, r.games) || faded;
     clickable(row, `Show matches as ${r.legend}`, () => ctx.setView('overview', { legend: r.legend }));
     body.append(row);
   }
-  card.append(el('div', { class: 'table-scroll' }, el('table', { class: 'legends-table' }, el('thead', {}, head), body)));
+  card.append(el('div', { class: 'table-scroll' }, el('table', { class: 'legends-table' }, el('thead', {}, head), body)), sampleNote(faded));
   return card;
 }

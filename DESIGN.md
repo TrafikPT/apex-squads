@@ -257,7 +257,8 @@ accounts (leave `account_key` out of the grouping).
 Facts (one row per thing that happened):
 - `f_match`: account_key, match_id, date, season, mode, is_ranked, map,
   legend, placement, kills, knocks, assists, damage, headshot hits, hits,
-  revives given/received, RP delta.
+  revives given/received, RP delta, **RP after** (the account's RP level
+  after the match, for the rank-over-time chart).
   Plus **`squad_key`**: the sorted list of teammate player_keys, so "with
   exactly X and Y" is a simple equality filter.
 - `f_weapon_match`: account_key, match_id, date, legend, weapon: kills,
@@ -309,6 +310,7 @@ WHERE is_ranked AND date >= date_trunc('month', current_date);
 | Respawned | `revive.respawn` | Count | High |
 | **Revives given** | `player_stats_br_ranked_latest.teammates_revived` | Difference between the last snapshot before the match and the first one after it | Depends on refresh timing (spike Q7) |
 | **RP delta** | `rp_snapshot` lines | First changed `rankScore` after the match − last value before it (same account). If RP only changed after several matches, the change is assigned to that group of matches. | Medium (API lag; back-to-back matches) |
+| **RP after** | `rp_snapshot` lines | The first changed `rankScore` after the match (same account). Tier and division come from the thresholds in `src/ui/ranks.ts` (Season 17 table), checked at each season start | Medium (API lag) |
 | Is ranked | `match_info.game_mode` | Value TBD (spike Q1) | — |
 | Teammates in a match | `team.teammate_X` + `roster` (teammate flag, platform ID) | Stable `player_key` from the roster ID, not the name | High (spike Q10) |
 | Teammate legend | `team.legendSelect_X` | — | High |
@@ -538,21 +540,24 @@ name and GEP players by platform ID; they are linked with "merge players".
 The dashboard has to stay focused, so a feature that adds nothing is easy to
 remove:
 - **One feature = one module.** A tab is one entry in `NAV` and one view
-  file; an Overview card is one entry in a card list and one function.
-  Removing a feature is deleting a line and a file.
-- **Conditional cards.** An insight card appears only when it has something
-  to say; otherwise it takes no space.
-- **Show sample size.** Every rate or average shows its *n*, and numbers
-  below a minimum sample are faded. One player's data, sliced by legend,
-  teammate and map, gets small fast.
+  file; an Overview card is one entry in `INSIGHT_CARDS`
+  (`src/ui/views/overview.ts`) and one function. Removing a feature is
+  deleting a line and a function.
+- **Conditional cards.** An insight card returns null when it has nothing to
+  say, and then takes no space.
+- **Show sample size.** Every rate or average shows its *n*. Rows and tiles
+  under `MIN_SAMPLE` (5 games, `src/ui/views/shared.ts`) are faded and never
+  picked as "best". One player's data, sliced by legend, teammate and map,
+  gets small fast.
 - Only high-confidence stats. Medium-confidence ones (damage per weapon) are
   labelled as estimates.
 
 ### Planned
 | Where | Feature |
 |---|---|
-| Overview | RP line chart over the season (replaces the static rank badge), with "games to next rank" at the current RP per game |
-| Overview | "Best / worst game of the week" card (conditional) |
+| Overview | ~~RP chart with ranks~~ **done**: for one account it plots the RP level against the division thresholds (labelled bands); across accounts it plots the net RP total, since levels can't be added up. Recent matches were removed from Overview (the Matches tab has them) to give the chart the height |
+| Overview | "Games to next rank" at the current RP per game (one account only) |
+| Overview | ~~Best / worst game~~ **done**: within the filter selection (not a fixed week), shown from 5 matches. Ranked by RP when every match has it, else placement → kills → damage |
 | Matches | Group by play session (a gap of N hours, not the calendar day, so late nights stay together), with net RP per session |
 | Squads | Support stats: knocked squadmates revived vs lost, how often I get picked up, how many knocks become kills (mine or the squad's) |
 | Weapons | Personal tier list: kills per match with the gun and damage share, normalised for games played. Not win rate: guns held late in a match correlate with surviving |

@@ -2,45 +2,83 @@ import { el, svgEl, svgText } from '../dom';
 import type { MatchFact } from '../facts';
 import { dayTime, fixed, fmtDateTime, fmtDay, fmtInt, niceTicks, pct, signed, xTickIndices } from '../format';
 import { legendBadge } from '../portraits';
-import { openMatch } from './matches';
-import { kpis, rpByDay, RpPoint } from '../stats';
+import { divisionFloors, rankName, rankOf, TIERS } from '../ranks';
+import { kpis, rankedAccount, rankGames, rpByDay } from '../stats';
 import type { ViewContext, ViewResult } from './context';
+import { openMatch } from './matches';
+import { clickable, MIN_SAMPLE } from './shared';
+
+/**
+ * Insight cards under the headline numbers. Each returns null when it has
+ * nothing worth saying for the selection, so the row only shows what's
+ * relevant; removing a card is deleting its entry.
+ */
+const INSIGHT_CARDS: ((ctx: ViewContext) => HTMLElement | null)[] = [
+  (ctx) => gameCard(ctx, 'best'),
+  (ctx) => gameCard(ctx, 'worst'),
+];
 
 export function overviewView(ctx: ViewContext): ViewResult {
-  const { card, points, host } = rpCard(ctx.matches);
+  const { card, draw } = rpCard(ctx.matches);
+  const cards = INSIGHT_CARDS.map((c) => c(ctx)).filter((c) => c !== null);
   return {
     node: el('div', { class: 'view view-overview' },
-      el('div', { class: 'top' }, card, tiles(ctx.matches)),
-      recentMatches(ctx),
+      card,
+      el('div', { class: 'overview-side' }, tiles(ctx.matches), cards.length ? el('div', { class: 'insights' }, ...cards) : ''),
     ),
-    mounted: () => {
-      if (host) drawRpChart(host, points);
-    },
+    mounted: draw,
   };
 }
 
-function rpCard(matches: MatchFact[]) {
+/** One point per play day: the net RP running total, or the RP level reached (rank mode). */
+interface ChartPoint {
+  day: string;
+  value: number;
+  delta: number;
+  matches: number;
+}
+
+/**
+ * Net RP over the selection. When it covers one account the chart shows that
+ * account's RP level against the rank thresholds; RP levels of several
+ * accounts can't be added up, so across accounts it shows the running total.
+ */
+function rpCard(matches: MatchFact[]): { card: HTMLElement; draw?: () => void } {
   const k = kpis(matches);
-  const card = el('section', { class: 'card' }, el('h2', { class: 'card-title' }, 'Net RP'));
+  const card = el('section', { class: 'card rp-card' }, el('h2', { class: 'card-title' }, 'Net RP'));
   if (k.rpNet === null) {
     card.append(el('div', { class: 'hero' }, '–'), el('div', { class: 'empty' }, 'No ranked matches in this selection'));
-    return { card, points: [], host: null };
+    return { card };
+  }
+  const days = rpByDay(matches);
+  const single = rankedAccount(matches) !== null;
+  const levels = single ? days.filter((p) => p.level !== null) : [];
+  const games = `${k.rpMatches} ranked ${k.rpMatches === 1 ? 'match' : 'matches'}`;
+  let sub: string;
+  if (levels.length) {
+    const first = levels[0];
+    const from = rankOf(first.level! - first.delta);
+    const to = rankOf(levels[levels.length - 1].level!);
+    sub = `${rankName(from.tier, from.division)} → ${rankName(to.tier, to.division)} · ${games}`;
+  } else {
+    sub = `over ${games} · running total by day${single ? '' : ' · pick one account to see your rank'}`;
   }
   const host = el('div', { class: 'chart' });
-  card.append(
-    el('div', { class: `hero ${k.rpNet >= 0 ? 'good' : 'bad'}` }, signed(k.rpNet)),
-    el('div', { class: 'hero-sub' }, `over ${k.rpMatches} ranked ${k.rpMatches === 1 ? 'match' : 'matches'} · running total by day`),
-    host,
-  );
-  return { card, points: rpByDay(matches), host };
+  card.append(el('div', { class: `hero ${k.rpNet >= 0 ? 'good' : 'bad'}` }, signed(k.rpNet)), el('div', { class: 'hero-sub' }, sub), host);
+  const draw = levels.length
+    ? () => drawRpChart(host, levels.map((p) => ({ ...p, value: p.level! })), true)
+    : () => drawRpChart(host, days.map((p) => ({ ...p, value: p.cumulative })), false);
+  return { card, draw };
 }
 
 function tiles(matches: MatchFact[]): HTMLElement {
   const k = kpis(matches);
-  const tile = (label: string, value: string) =>
-    el('div', { class: 'tile' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
+  const few = k.matches > 0 && k.matches < MIN_SAMPLE;
+  const tile = (label: string, value: string, sample = true) =>
+    el('div', { class: `tile${few && sample ? ' low-sample' : ''}`, title: few && sample ? `Fewer than ${MIN_SAMPLE} matches: too few to judge` : '' },
+      el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
   return el('div', { class: 'tiles' },
-    tile('Matches', fmtInt(k.matches)),
+    tile('Matches', fmtInt(k.matches), false),
     tile('Avg placement', k.avgPlacement === null ? '–' : `#${k.avgPlacement.toFixed(1)}`),
     tile('Wins', pct(k.winRate)),
     tile('Top 5', pct(k.top5Rate)),
@@ -51,59 +89,31 @@ function tiles(matches: MatchFact[]): HTMLElement {
   );
 }
 
-function recentMatches(ctx: ViewContext): HTMLElement {
-  const sorted = [...ctx.matches].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
-  const card = el('section', { class: 'card table-card' },
-    el('h2', { class: 'card-title' }, 'Recent matches', el('span', { class: 'aside' }, `${sorted.length} in selection`)));
-  if (!sorted.length) {
-    card.append(el('div', { class: 'empty' }, 'No matches for these filters'));
-    return card;
-  }
-  const head = el('tr', {});
-  const cols: [string, boolean][] = [['Legend', false], ['Date', false], ['Squad', false],
-    ['Place', true], ['K / A / Kn', true], ['Damage', true], ['RP', true]];
-  for (const [label, num] of cols) head.append(el('th', { class: num ? 'num' : '' }, label));
-
-  const body = el('tbody', {});
-  for (const m of sorted.slice(0, 100)) {
-    const squad = el('td', {});
-    [...(ctx.squadOf.get(m.matchId) ?? [])].forEach((p, i) => {
-      if (i) squad.append(', ');
-      squad.append(el('span', { class: ctx.regulars.has(p) ? 'squad-friend' : 'squad-random' }, ctx.playerName(p)));
-    });
-    const rp = el('td', { class: 'num' });
-    if (m.rpDelta === null) rp.append(el('span', { class: 'muted' }, '–'));
-    else rp.append(el('span', { class: m.rpDelta >= 0 ? 'good' : 'bad' }, signed(m.rpDelta)));
-    const row = el('tr', { class: 'clickable', tabindex: '0', title: 'Show match details' },
-      el('td', { class: 'legend-col' }, legendBadge(m.legend)),
-      el('td', {}, fmtDateTime(m.startedAt)),
-      squad,
-      el('td', { class: 'num' }, el('span', { class: `place${m.placement === 1 ? ' win' : ''}` }, `#${m.placement}`)),
-      el('td', { class: 'num' }, `${m.kills} / ${m.assists} / ${m.knocks}`),
-      el('td', { class: 'num' }, fmtInt(m.damage)),
-      rp,
-    );
-    const open = () => {
-      openMatch(m.matchId);
-      ctx.setView('matches');
-    };
-    row.addEventListener('click', open);
-    row.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        open();
-      }
-    });
-    body.append(row);
-  }
-  card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)));
+/** The selection's best or worst game (see rankGames); opens its details. */
+function gameCard(ctx: ViewContext, which: 'best' | 'worst'): HTMLElement | null {
+  if (ctx.matches.length < MIN_SAMPLE) return null;
+  const ranked = rankGames(ctx.matches);
+  const m = which === 'best' ? ranked[0] : ranked[ranked.length - 1];
+  const sub = [`${fmtInt(m.damage)} dmg`, m.rpDelta === null ? '' : `${signed(m.rpDelta)} RP`, fmtDateTime(m.startedAt)];
+  const card = el('div', { class: 'tile insight with-portrait' },
+    legendBadge(m.legend),
+    el('div', { class: 'insight-text' },
+      el('div', { class: 'label' }, which === 'best' ? 'Best game' : 'Worst game'),
+      el('div', { class: 'value' }, `#${m.placement} · ${m.kills} ${m.kills === 1 ? 'kill' : 'kills'}`),
+      el('div', { class: 'sub' }, sub.filter(Boolean).join(' · ')),
+    ),
+  );
+  clickable(card, 'Show match details', () => {
+    openMatch(m.matchId);
+    ctx.setView('matches');
+  });
   return card;
 }
 
-function drawRpChart(host: HTMLElement, points: RpPoint[]): void {
+function drawRpChart(host: HTMLElement, points: ChartPoint[], ranked: boolean): void {
   const width = host.clientWidth || 600;
-  const height = 170;
-  const m = { top: 8, right: 12, bottom: 22, left: 44 };
+  const height = Math.max(170, host.clientHeight);
+  const m = { top: 8, right: 12, bottom: 22, left: ranked ? 80 : 44 };
   const w = width - m.left - m.right;
   const h = height - m.top - m.bottom;
 
@@ -111,19 +121,57 @@ function drawRpChart(host: HTMLElement, points: RpPoint[]): void {
   const t0 = times[0];
   const t1 = times[times.length - 1];
   const x = (t: number) => m.left + (t1 === t0 ? w / 2 : ((t - t0) / (t1 - t0)) * w);
-  const values = points.map((p) => p.cumulative);
-  const ticks = niceTicks(Math.min(0, ...values), Math.max(0, ...values), 4);
+  const values = points.map((p) => p.value);
+  let ticks: number[];
+  if (ranked) {
+    // From the floor of the lowest division reached to the start of the next one above the highest.
+    const top = rankOf(Math.max(...values));
+    ticks = divisionFloors(rankOf(Math.min(...values)).floor, top.next ?? Math.max(...values) + 500);
+    if (top.next === null) ticks.push(Math.max(...values) + 500);
+  } else {
+    ticks = niceTicks(Math.min(0, ...values), Math.max(0, ...values), 4);
+  }
   const yMin = ticks[0];
   const yMax = ticks[ticks.length - 1];
   const y = (v: number) => m.top + h - ((v - yMin) / (yMax - yMin || 1)) * h;
 
   const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, role: 'img', tabindex: '0',
-    'aria-label': `Net RP running total, ${points.length} play days` });
-  for (const t of ticks) {
-    svg.append(
-      svgEl('line', { class: t === 0 ? 'zero' : 'gridline', x1: m.left, x2: width - m.right, y1: y(t), y2: y(t) }),
-      svgText(fmtInt(t), { class: 'tick', x: m.left - 8, y: y(t) + 4, 'text-anchor': 'end' }),
-    );
+    'aria-label': ranked ? `RP level by play day against the rank thresholds, ${points.length} play days`
+      : `Net RP running total, ${points.length} play days` });
+  if (ranked) {
+    // Every other tier gets a faint band, so tiers read as blocks without colour.
+    TIERS.forEach((t, i) => {
+      const lo = Math.max(t.floor, yMin);
+      const hi = Math.min(TIERS[i + 1]?.floor ?? Infinity, yMax);
+      if (i % 2 && hi > lo) svg.append(svgEl('rect', { class: 'band', x: m.left, width: w, y: y(hi), height: y(lo) - y(hi) }));
+    });
+    const tierFloors = new Set<number>(TIERS.map((t) => t.floor));
+    for (const t of ticks) {
+      svg.append(svgEl('line', { class: tierFloors.has(t) ? 'tier-line' : 'gridline', x1: m.left, x2: width - m.right, y1: y(t), y2: y(t) }));
+    }
+    // Each label sits mid-band, so the band a point falls in is its rank. When
+    // divisions get too thin to label, name the tiers instead.
+    const label = (text: string, lo: number, hi: number) =>
+      svg.append(svgText(text, { class: 'tick', x: m.left - 8, y: (y(lo) + y(hi)) / 2 + 4, 'text-anchor': 'end' }));
+    if (ticks.length <= 9 && y(ticks[0]) - y(ticks[1]) >= 16) {
+      for (let i = 0; i + 1 < ticks.length; i++) {
+        const r = rankOf(ticks[i]);
+        label(rankName(r.tier, r.division), ticks[i], ticks[i + 1]);
+      }
+    } else {
+      TIERS.forEach((t, i) => {
+        const lo = Math.max(t.floor, yMin);
+        const hi = Math.min(TIERS[i + 1]?.floor ?? Infinity, yMax);
+        if (y(lo) - y(hi) >= 16) label(t.tier, lo, hi);
+      });
+    }
+  } else {
+    for (const t of ticks) {
+      svg.append(
+        svgEl('line', { class: t === 0 ? 'zero' : 'gridline', x1: m.left, x2: width - m.right, y1: y(t), y2: y(t) }),
+        svgText(fmtInt(t), { class: 'tick', x: m.left - 8, y: y(t) + 4, 'text-anchor': 'end' }),
+      );
+    }
   }
   for (const i of xTickIndices(points.length, Math.max(2, Math.floor(w / 110)))) {
     svg.append(svgText(fmtDay(points[i].day), {
@@ -131,11 +179,15 @@ function drawRpChart(host: HTMLElement, points: RpPoint[]): void {
       'text-anchor': i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle',
     }));
   }
-  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(times[i]).toFixed(1)},${y(p.cumulative).toFixed(1)}`).join('');
-  const area = `${line}L${x(t1).toFixed(1)},${y(0).toFixed(1)}L${x(t0).toFixed(1)},${y(0).toFixed(1)}Z`;
-  svg.append(svgEl('path', { class: 'area', d: area }), svgEl('path', { class: 'line', d: line }));
+  const line = points.map((p, i) => `${i ? 'L' : 'M'}${x(times[i]).toFixed(1)},${y(p.value).toFixed(1)}`).join('');
+  // The area shades gains and losses against zero; an RP level has no zero line to shade to.
+  if (!ranked) {
+    const area = `${line}L${x(t1).toFixed(1)},${y(0).toFixed(1)}L${x(t0).toFixed(1)},${y(0).toFixed(1)}Z`;
+    svg.append(svgEl('path', { class: 'area', d: area }));
+  }
+  svg.append(svgEl('path', { class: 'line', d: line }));
   const last = points[points.length - 1];
-  svg.append(svgEl('circle', { class: 'dot', cx: x(t1), cy: y(last.cumulative), r: 4 }));
+  svg.append(svgEl('circle', { class: 'dot', cx: x(t1), cy: y(last.value), r: 4 }));
 
   // Hover / focus layer: crosshair snaps to the nearest play day.
   const cross = svgEl('line', { class: 'crosshair', y1: m.top, y2: m.top + h, visibility: 'hidden' });
@@ -150,16 +202,17 @@ function drawRpChart(host: HTMLElement, points: RpPoint[]): void {
     active = i;
     const p = points[i];
     const px = x(times[i]);
-    const py = y(p.cumulative);
+    const py = y(p.value);
     cross.setAttribute('x1', String(px));
     cross.setAttribute('x2', String(px));
     cross.setAttribute('visibility', 'visible');
     hoverDot.setAttribute('cx', String(px));
     hoverDot.setAttribute('cy', String(py));
     hoverDot.setAttribute('visibility', 'visible');
+    const r = rankOf(p.value);
     tip.replaceChildren(
-      el('div', { class: 't-value' }, signed(p.cumulative)),
-      el('div', {}, el('span', { class: 't-key' }), 'Net RP so far'),
+      el('div', { class: 't-value' }, ranked ? `${fmtInt(p.value)} RP` : signed(p.value)),
+      el('div', {}, el('span', { class: 't-key' }), ranked ? rankName(r.tier, r.division) : 'Net RP so far'),
       el('div', { class: 't-muted' }, `${fmtDay(p.day)} · ${signed(p.delta)} that day · ${p.matches} ${p.matches === 1 ? 'match' : 'matches'}`),
     );
     tip.hidden = false;

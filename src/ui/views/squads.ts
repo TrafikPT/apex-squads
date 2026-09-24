@@ -1,15 +1,13 @@
 import { el } from '../dom';
-
-/** Teammates per match besides me (trios). Empty slots are shown as randoms. */
-const TEAMMATE_SLOTS = 2;
 import { fixed, pct, place, signed } from '../format';
 import { legendBadge } from '../portraits';
 import { compStats, CompRow, kpis, Kpis, squadStats, SquadRow, teammateStats, TeammateRow } from '../stats';
 import type { ViewContext, ViewResult } from './context';
-import { clickable, damageText, headRow, rpCell, rpPerMatch, SortColumn, sortableHead, sortRows, SortState, vsAverage } from './shared';
+import { clickable, damageText, headRow, markSample, MIN_SAMPLE, rpCell, rpPerMatch, sampleNote, SortColumn, sortableHead, sortRows,
+  SortState, vsAverage } from './shared';
 
-/** Minimum games before a squad or teammate can be called "best". */
-const MIN_GAMES_FOR_BEST = 5;
+/** Teammates per match besides me (trios). Empty slots are shown as randoms. */
+const TEAMMATE_SLOTS = 2;
 
 const COMP_COLUMNS: SortColumn<CompRow>[] = [
   { label: 'Comp' },
@@ -74,10 +72,10 @@ function insights(ctx: ViewContext, squads: SquadRow[], mates: TeammateRow[]): H
 
   const most = mates[0];
   const bestSquad = squads
-    .filter((s) => s.friends.length && s.games >= MIN_GAMES_FOR_BEST)
+    .filter((s) => s.friends.length && s.games >= MIN_SAMPLE)
     .sort((a, b) => (a.me.avgPlacement ?? 99) - (b.me.avgPlacement ?? 99))[0];
   const bestRp = mates
-    .filter((t) => t.games >= MIN_GAMES_FOR_BEST && t.me.rpMatches)
+    .filter((t) => t.games >= MIN_SAMPLE && t.me.rpMatches)
     .sort((a, b) => rpPerMatch(b.me)! - rpPerMatch(a.me)!)[0];
   const solo = squads.find((s) => !s.friends.length);
 
@@ -85,9 +83,9 @@ function insights(ctx: ViewContext, squads: SquadRow[], mates: TeammateRow[]): H
     most ? tile('Most played with', ctx.playerName(most.playerKey), `${most.games} games together`)
       : tile('Most played with', '–', 'no regular teammates yet'),
     bestSquad ? tile('Best squad', squadName(ctx, bestSquad.friends), `${place(bestSquad.me.avgPlacement)} avg placement · ${bestSquad.games} games`)
-      : tile('Best squad', '–', `needs ${MIN_GAMES_FOR_BEST}+ games together`),
+      : tile('Best squad', '–', `needs ${MIN_SAMPLE}+ games together`),
     bestRp ? tile('Best RP partner', ctx.playerName(bestRp.playerKey), `${signed(rpPerMatch(bestRp.me)!)} RP per match · ${bestRp.games} games`)
-      : tile('Best RP partner', '–', `needs ${MIN_GAMES_FOR_BEST}+ ranked games together`),
+      : tile('Best RP partner', '–', `needs ${MIN_SAMPLE}+ ranked games together`),
     solo ? tile('Solo queue', place(solo.me.avgPlacement), `avg placement with randoms · ${solo.games} games`)
       : tile('Solo queue', '–', 'no games with only randoms'),
   );
@@ -102,6 +100,7 @@ function squadsCard(ctx: ViewContext, squads: SquadRow[], baseline: Kpis, topLeg
     return card;
   }
   const body = el('tbody', {});
+  let faded = false;
   for (const s of squads) {
     const faces = el('span', { class: 'faces' });
     for (const f of s.friends) faces.append(legendBadge(topLegend.get(f) ?? ''));
@@ -119,13 +118,14 @@ function squadsCard(ctx: ViewContext, squads: SquadRow[], baseline: Kpis, topLeg
       el('td', { class: 'num' }, damageText(s.me)),
       rpCell(rpPerMatch(s.me)),
     );
+    faded = markSample(row, s.games) || faded;
     if (s.friends.length) clickable(row, `Show matches with ${squadName(ctx, s.friends)}`, () => ctx.setView('overview', { withPlayers: s.friends }));
     body.append(row);
   }
   card.append(el('div', { class: 'table-scroll' }, el('table', {},
     el('thead', {}, headRow([['Squad', false], ['Games', true], ['Avg place', true], ['vs avg', true], ['Wins', true],
       ['Top 5', true], ['Your kills', true], ['Your dmg', true], ['RP/match', true]])),
-    body)));
+    body)), sampleNote(faded));
   return card;
 }
 
@@ -139,6 +139,7 @@ function teammatesCard(ctx: ViewContext, mates: TeammateRow[], baseline: Kpis): 
     return card;
   }
   const body = el('tbody', {});
+  let faded = false;
   for (const t of mates) {
     const name = ctx.playerName(t.playerKey);
     const row = el('tr', {},
@@ -152,13 +153,14 @@ function teammatesCard(ctx: ViewContext, mates: TeammateRow[], baseline: Kpis): 
       el('td', { class: 'num' }, damageText(t.me)),
       rpCell(rpPerMatch(t.me)),
     );
+    faded = markSample(row, t.games) || faded;
     clickable(row, `Show matches with ${name}`, () => ctx.setView('overview', { withPlayers: [t.playerKey] }));
     body.append(row);
   }
   card.append(el('div', { class: 'table-scroll' }, el('table', {},
     el('thead', {}, headRow([['Player', false], ['Games', true], ['Their kills', true], ['Their knocks', true],
       ['Your place', true], ['vs avg', true], ['Your kills', true], ['Your dmg', true], ['RP/match', true]])),
-    body)));
+    body)), sampleNote(faded));
   return card;
 }
 
@@ -179,7 +181,7 @@ function compFaces(legends: string[]): HTMLElement {
 }
 
 function compInsights(comps: CompRow[]): HTMLElement {
-  const eligible = comps.filter((c) => c.games >= MIN_GAMES_FOR_BEST);
+  const eligible = comps.filter((c) => c.games >= MIN_SAMPLE);
   const best = (value: (c: CompRow) => number | null, better: 'high' | 'low') =>
     eligible.filter((c) => value(c) !== null)
       .sort((a, b) => (better === 'high' ? value(b)! - value(a)! : value(a)! - value(b)!))[0];
@@ -188,7 +190,7 @@ function compInsights(comps: CompRow[]): HTMLElement {
       el('div', { class: 'label' }, label),
       comp ? compFaces(comp.legends) : el('div', { class: 'value' }, '–'),
       el('div', { class: 'sub' }, comp ? sub(comp) : empty));
-  const need = `needs ${MIN_GAMES_FOR_BEST}+ premade games with a comp`;
+  const need = `needs ${MIN_SAMPLE}+ premade games with a comp`;
   const mostPlayed = comps[0];
   return el('div', { class: 'insights' },
     tile('Most played comp', mostPlayed, (c) => `${c.games} games`, 'no comp with 3+ premade games'),
@@ -210,8 +212,9 @@ function compsCard(ctx: ViewContext, comps: CompRow[], baseline: Kpis): HTMLElem
     ctx.setView('squads');
   });
   const body = el('tbody', {});
+  let faded = false;
   for (const c of sortRows(comps, COMP_COLUMNS, compSort)) {
-    body.append(el('tr', {},
+    const row = el('tr', {},
       el('td', {}, el('div', { class: 'who' }, compFaces(c.legends), el('span', { class: 'comp-names' }, c.legends.join(' · ')))),
       el('td', { class: 'num' }, String(c.games)),
       el('td', { class: 'num' }, place(c.me.avgPlacement)),
@@ -221,8 +224,10 @@ function compsCard(ctx: ViewContext, comps: CompRow[], baseline: Kpis): HTMLElem
       el('td', { class: 'num' }, c.teamKillsPerMatch.toFixed(1)),
       el('td', { class: 'num' }, c.teamKd.toFixed(2)),
       rpCell(rpPerMatch(c.me)),
-    ));
+    );
+    faded = markSample(row, c.games) || faded;
+    body.append(row);
   }
-  card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)));
+  card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)), sampleNote(faded));
   return card;
 }

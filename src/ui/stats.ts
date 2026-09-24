@@ -113,24 +113,39 @@ export interface RpPoint {
   day: string; // YYYY-MM-DD (local)
   delta: number;
   cumulative: number;
+  /** RP after the day's last match with a known level; null when none had one. */
+  level: number | null;
   matches: number;
 }
 
-/** Net RP per play day and its running total, oldest first. */
+/** Net RP per play day, its running total and the RP level reached, oldest first. */
 export function rpByDay(matches: MatchFact[]): RpPoint[] {
-  const byDay = new Map<string, { delta: number; matches: number }>();
+  const byDay = new Map<string, { delta: number; matches: number; level: number | null; at: string }>();
   for (const m of matches) {
     if (m.rpDelta === null) continue;
     const day = toLocalDay(new Date(m.startedAt));
-    const cur = byDay.get(day) ?? { delta: 0, matches: 0 };
+    const cur = byDay.get(day) ?? { delta: 0, matches: 0, level: null, at: '' };
     cur.delta += m.rpDelta;
     cur.matches += 1;
+    if (m.rpAfter !== null && m.startedAt > cur.at) {
+      cur.level = m.rpAfter;
+      cur.at = m.startedAt;
+    }
     byDay.set(day, cur);
   }
   let cumulative = 0;
   return [...byDay.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([day, v]) => ({ day, delta: v.delta, cumulative: (cumulative += v.delta), matches: v.matches }));
+    .map(([day, v]) => ({ day, delta: v.delta, cumulative: (cumulative += v.delta), level: v.level, matches: v.matches }));
+}
+
+/**
+ * The one account whose ranked matches make up the selection, or null when
+ * there are several (their RP levels can't be added up) or none.
+ */
+export function rankedAccount(matches: MatchFact[]): string | null {
+  const keys = new Set(matches.filter((m) => m.rpDelta !== null).map((m) => m.accountKey));
+  return keys.size === 1 ? [...keys][0] : null;
 }
 
 /** Teammates by games played with me in the given matches, most frequent first. */
@@ -256,6 +271,17 @@ export function groupByDay(matches: MatchFact[]): DayGroup[] {
     list.push(m);
   }
   return [...days].map(([day, list]) => ({ day, matches: list, summary: kpis(list) }));
+}
+
+/**
+ * Matches ordered best first. When every match has an RP delta they're compared
+ * on RP (what ranked is scored on); otherwise, and to break ties, on placement,
+ * then kills, then damage.
+ */
+export function rankGames(matches: MatchFact[]): MatchFact[] {
+  const byRp = matches.every((m) => m.rpDelta !== null);
+  return [...matches].sort((a, b) =>
+    (byRp ? b.rpDelta! - a.rpDelta! : 0) || a.placement - b.placement || b.kills - a.kills || b.damage - a.damage);
 }
 
 // ---------------------------------------------------------------- legends

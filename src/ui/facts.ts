@@ -11,7 +11,7 @@ export interface Account {
   alias: string;
   name: string;
   /** Latest RP snapshot for this account, if any. */
-  rank?: { tier: string; division: number; rp: number };
+  rank?: { tier: string; division: number | null; rp: number };
 }
 
 export interface Player {
@@ -38,6 +38,8 @@ export interface MatchFact {
   revivesReceived: number;
   /** null outside ranked, or when no RP snapshot bracketed the match. */
   rpDelta: number | null;
+  /** The account's RP right after the match (first changed snapshot); null when unknown. */
+  rpAfter: number | null;
   /** Sorted teammate player keys joined with '|'. */
   squadKey: string;
 }

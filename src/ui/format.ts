@@ -23,14 +23,15 @@ export function uniqueSorted(xs: string[]): string[] {
   return [...new Set(xs)].sort();
 }
 
-/** Round, evenly spaced axis ticks covering [min, max]. */
+/** Round, evenly spaced integer axis ticks covering [min, max]. */
 export function niceTicks(min: number, max: number, count: number): number[] {
   if (min === max) max = min + 1;
   const raw = (max - min) / count;
   const mag = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map((s) => s * mag).find((s) => s >= raw)!;
+  // Integer ticks only: a fractional step would round into duplicates (and -0).
+  const step = Math.max(1, [1, 2, 2.5, 5, 10].map((s) => s * mag).find((s) => s >= raw)!);
   const ticks: number[] = [];
-  for (let t = Math.floor(min / step) * step; t <= Math.ceil(max / step) * step + 1e-9; t += step) ticks.push(Math.round(t));
+  for (let t = Math.floor(min / step) * step; t <= Math.ceil(max / step) * step + 1e-9; t += step) ticks.push(Math.round(t) || 0);
   return ticks;
 }
 

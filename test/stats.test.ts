@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Dataset, MatchFact } from '../src/ui/facts';
 import { generateMockData } from '../src/ui/mock-data';
-import { compStats, DEFAULT_FILTERS, filterMatches, groupByDay, kpis, legendStats, loadoutStats, matchLoadout, regularPlayers, rpByDay, squadStats, teammateStats, weaponStats } from '../src/ui/stats';
+import { compStats, DEFAULT_FILTERS, filterMatches, groupByDay, kpis, legendStats, loadoutStats, matchLoadout, rankedAccount, rankGames, regularPlayers, rpByDay, squadStats, teammateStats, weaponStats } from '../src/ui/stats';
+import { niceTicks } from '../src/ui/format';
+import { divisionFloors, rankName, rankOf } from '../src/ui/ranks';
 import { weaponClass } from '../src/ui/weapons';
 
 const NOW = new Date(2026, 8, 24, 23, 0); // 24 Sep 2026, local time
@@ -11,7 +13,7 @@ function match(id: string, startedAt: Date, patch: Partial<MatchFact> = {}): Mat
   return {
     matchId: id, accountKey: 'a1', startedAt: startedAt.toISOString(), mode: 'ranked', map: 'Olympus',
     legend: 'Bangalore', placement: 10, teams: 20, kills: 2, assists: 1, knocks: 3, deaths: 1, damage: 800,
-    revivesGiven: 0, revivesReceived: 0, rpDelta: 10, squadKey: '', ...patch,
+    revivesGiven: 0, revivesReceived: 0, rpDelta: 10, rpAfter: null, squadKey: '', ...patch,
   };
 }
 
@@ -105,8 +107,8 @@ test('rpByDay sums per local day and keeps a running total', () => {
     match('4', new Date(2026, 8, 21, 23), { rpDelta: null, mode: 'pubs' }),
   ]);
   assert.deepEqual(pts, [
-    { day: '2026-09-20', delta: -20, cumulative: -20, matches: 1 },
-    { day: '2026-09-21', delta: 50, cumulative: 30, matches: 2 },
+    { day: '2026-09-20', delta: -20, cumulative: -20, level: null, matches: 1 },
+    { day: '2026-09-21', delta: 50, cumulative: 30, level: null, matches: 2 },
   ]);
 });
 
@@ -266,4 +268,52 @@ test('compStats: full premades only, legends as a set, team kills and K/D', () =
   assert.equal(c.teamKillsPerMatch, (3 + 2 + 1 + 1 + 4 + 0) / 2);
   assert.equal(c.teamKd, 11 / 6, 'each teammate died once per match in the fixture');
   assert.equal(c.me.avgPlacement, 3);
+});
+
+test('rankGames: RP first when every match has it, else placement, kills, damage', () => {
+  const t = new Date(2026, 8, 20);
+  const ranked = [
+    match('win', t, { placement: 1, rpDelta: 80 }),
+    match('bigKills', t, { placement: 4, kills: 9, rpDelta: 95 }),
+    match('loss', t, { placement: 18, rpDelta: -35 }),
+    match('tieLowDmg', t, { placement: 18, rpDelta: -35, damage: 100 }),
+  ];
+  assert.deepEqual(rankGames(ranked).map((m) => m.matchId), ['bigKills', 'win', 'loss', 'tieLowDmg']);
+
+  const mixed = [...ranked, match('pubs', t, { mode: 'pubs', placement: 2, rpDelta: null })];
+  assert.deepEqual(rankGames(mixed).map((m) => m.matchId), ['win', 'pubs', 'bigKills', 'loss', 'tieLowDmg']);
+});
+
+test('niceTicks: whole numbers without duplicates or -0, even for tiny ranges', () => {
+  assert.deepEqual(niceTicks(-2, 0, 4), [-2, -1, 0]);
+  assert.ok(!Object.is(niceTicks(-2, 0, 4)[2], -0));
+  assert.deepEqual(niceTicks(0, 1, 4), [0, 1]);
+  assert.deepEqual(niceTicks(-1000, 3000, 4), [-1000, 0, 1000, 2000, 3000]);
+});
+
+test('rpByDay: the level is the RP after the day\'s last match', () => {
+  const points = rpByDay([
+    match('late', new Date(2026, 8, 20, 23), { rpDelta: -20, rpAfter: 6_080 }),
+    match('early', new Date(2026, 8, 20, 19), { rpDelta: 100, rpAfter: 6_100 }),
+    match('unknown', new Date(2026, 8, 21, 19), { rpDelta: 30, rpAfter: null }),
+  ]);
+  assert.deepEqual(points.map((p) => [p.day, p.cumulative, p.level]), [['2026-09-20', 80, 6_080], ['2026-09-21', 110, null]]);
+});
+
+test('rankedAccount: only when every ranked match is on one account', () => {
+  const t = new Date(2026, 8, 20);
+  assert.equal(rankedAccount([match('a', t), match('pubs', t, { accountKey: 'a2', rpDelta: null })]), 'a1');
+  assert.equal(rankedAccount([match('a', t), match('b', t, { accountKey: 'a2' })]), null);
+  assert.equal(rankedAccount([]), null);
+});
+
+test('ranks: thresholds, division names and floors', () => {
+  assert.deepEqual(rankOf(0), { tier: 'Rookie', division: 4, floor: 0, next: 250 });
+  assert.deepEqual(rankOf(5_399), { tier: 'Silver', division: 1, floor: 4_800, next: 5_400 });
+  assert.deepEqual(rankOf(5_400), { tier: 'Gold', division: 4, floor: 5_400, next: 6_100 });
+  assert.deepEqual(rankOf(11_399), { tier: 'Platinum', division: 1, floor: 10_600, next: 11_400 });
+  assert.deepEqual(rankOf(20_000), { tier: 'Master', division: null, floor: 15_000, next: null });
+  assert.equal(rankName('Gold', 2), 'Gold II');
+  assert.equal(rankName('Master', null), 'Master');
+  assert.deepEqual(divisionFloors(5_000, 8_200), [5_400, 6_100, 6_800, 7_500, 8_200]);
 });

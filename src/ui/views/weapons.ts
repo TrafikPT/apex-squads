@@ -3,10 +3,8 @@ import { fixed, fmtInt, pct } from '../format';
 import { kpis, Kpis, loadoutStats, LoadoutRow, weaponStats, WeaponRow } from '../stats';
 import { OTHER_WEAPON, WEAPON_CLASSES, WeaponClass, weaponClass, weaponLabel } from '../weapons';
 import type { ViewContext, ViewResult } from './context';
-import { damageText, rpCell, rpPerMatch, SortColumn, sortableHead, sortRows, SortState, vsAverage } from './shared';
-
-/** Minimum matches before a weapon can be called "best". */
-const MIN_MATCHES_FOR_BEST = 5;
+import { damageText, markSample, MIN_SAMPLE, rpCell, rpPerMatch, sampleNote, SortColumn, sortableHead, sortRows, SortState,
+  vsAverage } from './shared';
 
 /**
  * One fixed colour per weapon class (validated categorical palette, dark mode);
@@ -87,7 +85,7 @@ function insights(rows: WeaponRow[], loadouts: LoadoutRow[]): HTMLElement {
   const mostKills = [...guns].sort((a, b) => b.kills - a.kills)[0];
   const mostUsedLoadout = loadouts[0];
   const bestLoadout = loadouts
-    .filter((l) => l.games >= MIN_MATCHES_FOR_BEST && l.me.kd !== null)
+    .filter((l) => l.games >= MIN_SAMPLE && l.me.kd !== null)
     .sort((a, b) => b.me.kd! - a.me.kd!)[0];
   const types = classShares(rows).filter((c) => c.cls !== 'Other');
   const topType = types.sort((a, b) => b.share - a.share)[0];
@@ -99,7 +97,7 @@ function insights(rows: WeaponRow[], loadouts: LoadoutRow[]): HTMLElement {
     tile('Most used loadout', mostUsedLoadout ? mostUsedLoadout.weapons.join(' + ') : '–',
       mostUsedLoadout ? `${mostUsedLoadout.games} games` : 'no loadout with 3+ games'),
     tile('Best loadout', bestLoadout ? bestLoadout.weapons.join(' + ') : '–',
-      bestLoadout ? `${fixed(bestLoadout.me.kd, 2)} K/D · ${bestLoadout.games} games` : `needs ${MIN_MATCHES_FOR_BEST}+ games with it`),
+      bestLoadout ? `${fixed(bestLoadout.me.kd, 2)} K/D · ${bestLoadout.games} games` : `needs ${MIN_SAMPLE}+ games with it`),
     tile('Most kills', mostKills?.weapon ?? '–', mostKills ? `${mostKills.kills} kills · ${mostKills.knocks} knocks` : 'no weapon data'),
     tile('Top weapon type', topType?.cls ?? '–', topType ? `${pct(topType.share)} of your damage` : 'no weapon data'),
   );
@@ -175,10 +173,11 @@ function weaponsCard(ctx: ViewContext, rows: WeaponRow[]): HTMLElement {
     ctx.setView('weapons');
   });
   const body = el('tbody', {});
+  let faded = false;
   for (const r of sortRows(rows, COLUMNS, sort)) {
     const cls = weaponClass(r.weapon);
     const gun = isGun(r);
-    body.append(el('tr', {},
+    const row = el('tr', {},
       el('td', {}, el('div', { class: 'weapon-cell' },
         el('span', { class: 'weapon-name' }, weaponLabel(r.weapon)),
         gun ? el('span', { class: 'class-tag' }, el('span', { class: 'swatch', style: `background: ${CLASS_COLOR[cls]}` }), cls) : '')),
@@ -191,9 +190,11 @@ function weaponsCard(ctx: ViewContext, rows: WeaponRow[]): HTMLElement {
       el('td', { class: 'num' }, el('div', { class: 'games-cell' },
         el('div', { class: 'bar-track' }, el('div', { class: 'bar', style: `width: ${(r.damageShare / maxShare) * 100}%` })),
         el('span', { class: 'share' }, pct(r.damageShare)))),
-    ));
+    );
+    faded = markSample(row, r.matches) || faded;
+    body.append(row);
   }
-  card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)));
+  card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)), sampleNote(faded));
   return card;
 }
 
@@ -211,6 +212,7 @@ function loadoutsCard(ctx: ViewContext, loadouts: LoadoutRow[], baseline: Kpis):
     ctx.setView('weapons');
   });
   const body = el('tbody', {});
+  let faded = false;
   for (const l of sortRows(loadouts, LOADOUT_COLUMNS, loadoutSort)) {
     const guns = el('div', { class: 'loadout-cell' });
     l.weapons.forEach((w, i) => {
@@ -218,7 +220,7 @@ function loadoutsCard(ctx: ViewContext, loadouts: LoadoutRow[], baseline: Kpis):
       guns.append(el('span', { class: 'gun' }, el('span', { class: 'swatch', style: `background: ${CLASS_COLOR[weaponClass(w)]}` }),
         el('span', { class: 'weapon-name' }, w)));
     });
-    body.append(el('tr', {},
+    const row = el('tr', {},
       el('td', {}, guns),
       el('td', { class: 'num' }, fmtInt(l.games)),
       el('td', { class: 'num' }, l.me.avgPlacement === null ? '–' : `#${l.me.avgPlacement.toFixed(1)}`),
@@ -228,8 +230,10 @@ function loadoutsCard(ctx: ViewContext, loadouts: LoadoutRow[], baseline: Kpis):
       el('td', { class: 'num' }, fixed(l.me.avgKills, 2)),
       el('td', { class: 'num' }, damageText(l.me)),
       rpCell(rpPerMatch(l.me)),
-    ));
+    );
+    faded = markSample(row, l.games) || faded;
+    body.append(row);
   }
-  card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)));
+  card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)), sampleNote(faded));
   return card;
 }
