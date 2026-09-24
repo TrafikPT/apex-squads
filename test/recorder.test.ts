@@ -155,18 +155,52 @@ test('after a match, snapshots follow the post-match schedule', async () => {
 test('queueing again cancels remaining post-match snapshots', async () => {
   const { sink, clock, name, phase } = setup();
   name('Player1');
-  phase('aircraft');
-  phase('lobby');
+  phase('landed'); // app started mid-match
+  phase('match_summary');
   clock.advance(30_000); // 0s and 30s fire
   phase('loading_screen');
+  phase('legend_selection');
   clock.advance(600_000);
   await flush();
 
   assert.deepEqual(
     rpLines(sink).map((l) => l.key),
-    ['post_match', 'post_match', 'match_start'],
+    ['match_start', 'post_match', 'post_match', 'match_start'],
   );
   assert.equal(clock.pendingCount(), 0);
+});
+
+test('back-to-back matches without a lobby phase still get snapshots', async () => {
+  // The phase sequence GEP actually sent between matches (DESIGN.md §9).
+  const { sink, clock, name, phase } = setup();
+  name('Player1');
+  phase('lobby');
+  for (let i = 0; i < 2; i++) {
+    for (const p of ['legend_selection', 'aircraft', 'freefly', 'landed', 'match_summary', 'loading_screen']) {
+      phase(p);
+    }
+    clock.advance(POST_MATCH_DELAYS_S[POST_MATCH_DELAYS_S.length - 1] * 1000);
+  }
+  await flush();
+
+  const oneMatch = ['match_start', ...POST_MATCH_DELAYS_S.map(() => 'post_match')];
+  assert.deepEqual(
+    rpLines(sink).map((l) => l.key),
+    ['lobby', ...oneMatch, ...oneMatch],
+  );
+});
+
+test('quitting a match straight to the lobby counts as the match ending', async () => {
+  const { sink, clock, name, phase } = setup();
+  name('Player1');
+  phase('landed');
+  phase('lobby');
+  clock.advance(0);
+  await flush();
+  assert.deepEqual(
+    rpLines(sink).map((l) => l.key),
+    ['match_start', 'post_match'],
+  );
 });
 
 test('switching account in the lobby snapshots the new account', async () => {

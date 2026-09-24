@@ -49,6 +49,14 @@ export interface GepMessage {
 
 export type RpTrigger = 'lobby' | 'post_match' | 'match_start' | 'account_change';
 
+/** GEP `game_info.phase` values between legend select and the end of a match. */
+export const IN_MATCH_PHASES: ReadonlySet<string> = new Set([
+  'legend_selection',
+  'aircraft',
+  'freefly',
+  'landed',
+]);
+
 /** After a match, snapshot at these offsets so RP has time to update in the API. */
 export const POST_MATCH_DELAYS_S = [0, 30, 90, 180, 300];
 
@@ -68,6 +76,8 @@ export class Recorder {
   private seq = 0;
   private matchId: string | null = null;
   private phase: string | null = null;
+  /** A match ended and no new one started yet: post-match snapshots cover the lobby. */
+  private afterMatch = false;
   private playerName: string | null = null;
   private pendingRp: unknown[] = [];
 
@@ -114,24 +124,32 @@ export class Recorder {
     this.phase = phase;
     if (phase === previous) return;
 
-    if (phase === 'lobby') {
-      const cameFromMatch = previous !== null && previous !== 'lobby';
-      // Leaving a match: the next line will have no match id.
-      this.matchId = null;
-      if (cameFromMatch) {
-        this.cancelPendingRp();
-        for (const delay of POST_MATCH_DELAYS_S) {
-          this.pendingRp.push(
-            this.clock.setTimeout(() => void this.snapshotRp('post_match'), delay * 1000),
-          );
-        }
-      } else {
-        void this.snapshotRp('lobby');
-      }
-    } else if (previous === 'lobby') {
-      // Queued into a match: last chance for a "before" value.
+    // Real sessions rarely pass through 'lobby' between matches
+    // (match_summary -> loading_screen -> legend_selection), so matches are
+    // delimited by the in-match phases instead.
+    const wasInMatch = previous !== null && IN_MATCH_PHASES.has(previous);
+    const isInMatch = IN_MATCH_PHASES.has(phase);
+
+    if (isInMatch && !wasInMatch) {
+      // Queued into a match: last chance for a "before" value. RP only moves
+      // when a match ends, so this also holds when the app starts mid-match.
+      this.afterMatch = false;
       this.cancelPendingRp();
       void this.snapshotRp('match_start');
+    } else if (wasInMatch && !isInMatch) {
+      // Match over (summary, or quit straight to the lobby / loading screen).
+      this.afterMatch = true;
+      this.cancelPendingRp();
+      for (const delay of POST_MATCH_DELAYS_S) {
+        this.pendingRp.push(
+          this.clock.setTimeout(() => void this.snapshotRp('post_match'), delay * 1000),
+        );
+      }
+    }
+
+    if (phase === 'lobby') {
+      this.matchId = null;
+      if (!this.afterMatch) void this.snapshotRp('lobby');
     }
   }
 
