@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-test",
+    "rootDir": ".",
+    "types": [
+      "node"
+    ],
+    "lib": [
+      "ES2022"
+    ]
+  },
+  "include": [
+    "src/recorder.ts",
+    "src/jsonl-sink.ts",
+    "src/ui/facts.ts",
+    "src/ui/mock-data.ts",
+    "src/ui/stats.ts",
+    "src/ui/weapons.ts",
+    "test"
+  ],
+  "exclude": []
+}

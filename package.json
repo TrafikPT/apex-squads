@@ -1,0 +1,43 @@
+{
+  "name": "apex-tracker",
+  "productName": "Apex Tracker",
+  "version": "0.1.0",
+  "description": "Personal Apex Legends match recorder and stats (Overwolf GEP)",
+  "private": true,
+  "main": "dist/main.js",
+  "author": {
+    "name": "TrafikPT"
+  },
+  "license": "UNLICENSED",
+  "overwolf": {
+    "packages": [
+      "gep"
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && dotenv -- ow-electron .",
+    "test": "tsc -p tsconfig.test.json && node --test \"dist-test/test/**/*.test.js\"",
+    "ui:build": "esbuild src/ui/app.ts --bundle --format=iife --target=es2020 --outdir=ui/dist --entry-names=app --loader:.woff2=file --loader:.woff=file",
+    "ui:watch": "npm run ui:build -- --watch",
+    "ui:check": "tsc -p tsconfig.ui.json",
+    "app:preview": "npm run build && npm run ui:build && electron dist/preview-main.js"
+  },
+  "devDependencies": {
+    "@overwolf/ow-electron": "^42.7.1",
+    "@overwolf/ow-electron-packages-types": "^1.1.11",
+    "@types/node": "^24.9.0",
+    "dotenv-cli": "^10.0.0",
+    "electron": "^38.8.6",
+    "esbuild": "^0.25.12",
+    "sharp": "^0.34.5",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0"
+  }
+}

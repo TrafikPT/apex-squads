@@ -1,0 +1,244 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import type { Dataset, MatchFact } from '../src/ui/facts';
+import { generateMockData } from '../src/ui/mock-data';
+import { DEFAULT_FILTERS, filterMatches, groupByDay, kpis, legendStats, loadoutStats, matchLoadout, regularPlayers, rpByDay, squadStats, teammateStats, weaponStats } from '../src/ui/stats';
+import { weaponClass } from '../src/ui/weapons';
+
+const NOW = new Date(2026, 8, 24, 23, 0); // 24 Sep 2026, local time
+
+function match(id: string, startedAt: Date, patch: Partial<MatchFact> = {}): MatchFact {
+  return {
+    matchId: id, accountKey: 'a1', startedAt: startedAt.toISOString(), mode: 'ranked', map: 'Olympus',
+    legend: 'Bangalore', placement: 10, teams: 20, kills: 2, assists: 1, knocks: 3, deaths: 1, damage: 800,
+    revivesGiven: 0, revivesReceived: 0, rpDelta: 10, squadKey: '', ...patch,
+  };
+}
+
+function dataset(matches: MatchFact[], mates: [string, string, number?, string?][] = []): Dataset {
+  return {
+    accounts: [], players: [], matches, weapons: [], seasonStart: '2026-08-01',
+    teammates: mates.map(([matchId, playerKey, kills = 1, legend = 'Wraith']) => ({ matchId, playerKey, legend, kills, knocks: kills })),
+  };
+}
+
+test('period presets include today and count whole days back', () => {
+  const data = dataset([
+    match('today', new Date(2026, 8, 24, 20)),
+    match('day7', new Date(2026, 8, 18, 1)), // 7th day back, counting today
+    match('day8', new Date(2026, 8, 17, 23)),
+  ]);
+  const ids = filterMatches(data, { ...DEFAULT_FILTERS, period: '7d' }, NOW).map((m) => m.matchId);
+  assert.deepEqual(ids, ['today', 'day7']);
+});
+
+test('custom range is inclusive of both end dates', () => {
+  const data = dataset([
+    match('before', new Date(2026, 8, 9, 23)),
+    match('first', new Date(2026, 8, 10, 0, 30)),
+    match('last', new Date(2026, 8, 12, 23, 59)),
+    match('after', new Date(2026, 8, 13, 0, 1)),
+  ]);
+  const f = { ...DEFAULT_FILTERS, period: 'custom' as const, from: '2026-09-10', to: '2026-09-12' };
+  assert.deepEqual(filterMatches(data, f, NOW).map((m) => m.matchId), ['first', 'last']);
+});
+
+test('"played with" requires every selected teammate', () => {
+  const d = new Date(2026, 8, 20);
+  const data = dataset(
+    [match('ab', d), match('a', d), match('b', d)],
+    [['ab', 'A'], ['ab', 'B'], ['a', 'A'], ['a', 'R1'], ['b', 'B'], ['b', 'R2']],
+  );
+  const run = (withPlayers: string[]) =>
+    filterMatches(data, { ...DEFAULT_FILTERS, period: 'all', withPlayers }, NOW).map((m) => m.matchId);
+  assert.deepEqual(run(['A']), ['ab', 'a']);
+  assert.deepEqual(run(['A', 'B']), ['ab']);
+});
+
+test('dimension filters combine', () => {
+  const d = new Date(2026, 8, 20);
+  const data = dataset([
+    match('1', d, { legend: 'Wraith' }),
+    match('2', d, { legend: 'Wraith', mode: 'pubs', rpDelta: null }),
+    match('3', d, { legend: 'Wraith', accountKey: 'a2' }),
+    match('4', d),
+  ]);
+  const f = { ...DEFAULT_FILTERS, period: 'all' as const, legend: 'Wraith', account: 'a1' };
+  assert.deepEqual(filterMatches(data, f, NOW).map((m) => m.matchId), ['1']);
+});
+
+test('kpis average over matches; RP only over ranked ones', () => {
+  const d = new Date(2026, 8, 20);
+  const k = kpis([
+    match('1', d, { placement: 1, kills: 4, damage: 1200, rpDelta: 150 }),
+    match('2', d, { placement: 9, kills: 0, damage: 400, rpDelta: -25 }),
+    match('3', d, { placement: 5, kills: 2, damage: 800, mode: 'pubs', rpDelta: null }),
+  ]);
+  assert.equal(k.matches, 3);
+  assert.equal(k.avgPlacement, 5);
+  assert.equal(k.avgKills, 2);
+  assert.equal(k.avgDamage, 800);
+  assert.equal(k.winRate, 1 / 3);
+  assert.equal(k.top5Rate, 2 / 3);
+  assert.equal(k.rpNet, 125);
+  assert.equal(k.rpMatches, 2);
+});
+
+test('K/D divides total kills by total deaths', () => {
+  const d = new Date(2026, 8, 20);
+  assert.equal(kpis([match('1', d, { kills: 5, deaths: 0 }), match('2', d, { kills: 1, deaths: 2 })]).kd, 3);
+  assert.equal(kpis([match('1', d, { kills: 4, deaths: 0 })]).kd, 4, 'no deaths: K/D is the kill count');
+});
+
+test('kpis of an empty selection are empty, not zero', () => {
+  const k = kpis([]);
+  assert.equal(k.avgPlacement, null);
+  assert.equal(k.kd, null);
+  assert.equal(k.rpNet, null);
+});
+
+test('rpByDay sums per local day and keeps a running total', () => {
+  const pts = rpByDay([
+    match('1', new Date(2026, 8, 21, 22), { rpDelta: 40 }),
+    match('2', new Date(2026, 8, 20, 21), { rpDelta: -20 }),
+    match('3', new Date(2026, 8, 21, 23), { rpDelta: 10 }),
+    match('4', new Date(2026, 8, 21, 23), { rpDelta: null, mode: 'pubs' }),
+  ]);
+  assert.deepEqual(pts, [
+    { day: '2026-09-20', delta: -20, cumulative: -20, matches: 1 },
+    { day: '2026-09-21', delta: 50, cumulative: 30, matches: 2 },
+  ]);
+});
+
+test('mock data is deterministic and internally consistent', () => {
+  const a = generateMockData(NOW);
+  const b = generateMockData(NOW);
+  assert.deepEqual(a, b);
+  assert.ok(a.matches.length > 100);
+  const ids = new Set(a.matches.map((m) => m.matchId));
+  for (const t of a.teammates) assert.ok(ids.has(t.matchId));
+  for (const m of a.matches) {
+    assert.equal(a.teammates.filter((t) => t.matchId === m.matchId).length, 2);
+    assert.equal(m.rpDelta === null, m.mode !== 'ranked');
+    assert.ok(Date.parse(m.startedAt) <= NOW.getTime());
+    const guns = a.weapons.filter((w) => w.matchId === m.matchId);
+    assert.equal(guns.reduce((s, w) => s + w.damage, 0), m.damage, 'weapon damage adds up to match damage');
+    assert.equal(guns.reduce((s, w) => s + w.kills, 0), m.kills, 'weapon kills add up to match kills');
+  }
+});
+
+test('regular players are teammates with enough games overall', () => {
+  const d = new Date(2026, 8, 20);
+  const data = dataset([match('1', d), match('2', d), match('3', d)],
+    [['1', 'F'], ['2', 'F'], ['3', 'F'], ['1', 'R1'], ['2', 'R2'], ['3', 'R2']]);
+  assert.deepEqual([...regularPlayers(data, 3)], ['F']);
+  assert.deepEqual([...regularPlayers(data, 2)].sort(), ['F', 'R2']);
+});
+
+test('teammate stats: their kills per game, top legend, and my numbers with them', () => {
+  const d = new Date(2026, 8, 20);
+  const data = dataset(
+    [match('1', d, { placement: 2 }), match('2', d, { placement: 4 }), match('3', d, { placement: 9 }), match('4', d, { placement: 20 })],
+    [['1', 'F', 3, 'Lifeline'], ['2', 'F', 1, 'Lifeline'], ['3', 'F', 2, 'Wraith'], ['4', 'R', 0]],
+  );
+  const rows = teammateStats(data, data.matches, new Set(['F']));
+  assert.equal(rows.length, 1);
+  const [f] = rows;
+  assert.equal(f.playerKey, 'F');
+  assert.equal(f.games, 3);
+  assert.equal(f.killsPerGame, 2);
+  assert.equal(f.topLegend, 'Lifeline');
+  assert.equal(f.me.avgPlacement, 5, 'match 4 without F is excluded');
+});
+
+test('teammate stats only count matches in the selection', () => {
+  const d = new Date(2026, 8, 20);
+  const data = dataset([match('1', d), match('2', d), match('3', d)], [['1', 'F'], ['2', 'F'], ['3', 'F']]);
+  assert.equal(teammateStats(data, data.matches.slice(0, 2), new Set(['F']), 1)[0].games, 2);
+});
+
+test('squad stats group by friends in the squad, ignoring randoms', () => {
+  const d = new Date(2026, 8, 20);
+  const data = dataset(
+    [match('ab1', d, { placement: 1 }), match('ab2', d, { placement: 3 }), match('a1', d), match('solo', d, { placement: 15 })],
+    [['ab1', 'A'], ['ab1', 'B'], ['ab2', 'B'], ['ab2', 'A'], ['a1', 'A'], ['a1', 'R1'], ['solo', 'R2'], ['solo', 'R3']],
+  );
+  const rows = squadStats(data, data.matches, new Set(['A', 'B']), 1);
+  const byKey = new Map(rows.map((r) => [r.friends.join('+'), r]));
+  assert.equal(byKey.get('A+B')?.games, 2);
+  assert.equal(byKey.get('A+B')?.me.avgPlacement, 2);
+  assert.equal(byKey.get('A')?.games, 1);
+  assert.equal(byKey.get('')?.me.avgPlacement, 15, 'solo queue row has no friends');
+  assert.equal(rows[0].friends.join('+'), 'A+B', 'most games first');
+});
+
+test('groupByDay: newest day first, newest match first, with a summary', () => {
+  const groups = groupByDay([
+    match('a', new Date(2026, 8, 20, 21), { rpDelta: 30 }),
+    match('b', new Date(2026, 8, 21, 20), { rpDelta: -10 }),
+    match('c', new Date(2026, 8, 20, 23), { rpDelta: 5 }),
+  ]);
+  assert.deepEqual(groups.map((g) => g.day), ['2026-09-21', '2026-09-20']);
+  assert.deepEqual(groups[1].matches.map((m) => m.matchId), ['c', 'a']);
+  assert.equal(groups[1].summary.rpNet, 35);
+});
+
+test('legendStats: games, pick rate and my numbers per legend', () => {
+  const d = new Date(2026, 8, 20);
+  const rows = legendStats([
+    match('1', d, { legend: 'Wraith', placement: 2 }),
+    match('2', d, { legend: 'Wraith', placement: 6 }),
+    match('3', d, { legend: 'Bangalore', placement: 10 }),
+    match('4', d, { legend: 'Wraith', placement: 1 }),
+  ]);
+  assert.deepEqual(rows.map((r) => [r.legend, r.games, r.pickRate]), [['Wraith', 3, 0.75], ['Bangalore', 1, 0.25]]);
+  assert.equal(rows[0].me.avgPlacement, 3);
+});
+
+test('weaponStats: totals per weapon over selected matches only, with damage share', () => {
+  const d = new Date(2026, 8, 20);
+  const data = dataset([match('1', d), match('2', d), match('3', d)]);
+  data.weapons = [
+    { matchId: '1', weapon: 'R-99', kills: 2, knocks: 3, damage: 600 },
+    { matchId: '1', weapon: 'Other', kills: 0, knocks: 0, damage: 100 },
+    { matchId: '2', weapon: 'R-99', kills: 1, knocks: 1, damage: 300 },
+    { matchId: '3', weapon: 'Mastiff', kills: 9, knocks: 9, damage: 5000 },
+  ];
+  const rows = weaponStats(data, data.matches.slice(0, 2));
+  assert.deepEqual(rows.map((r) => [r.weapon, r.matches, r.kills, r.damage]), [['R-99', 2, 3, 900], ['Other', 1, 0, 100]]);
+  assert.equal(rows[0].damageShare, 0.9);
+});
+
+test('weapon classes: known guns map to a class, anything else is Other', () => {
+  assert.equal(weaponClass('R-99'), 'SMG');
+  assert.equal(weaponClass('30-30 Repeater'), 'Marksman');
+  assert.equal(weaponClass('Some New Gun'), 'Other');
+});
+
+test('matchLoadout: top two guns by damage, grenades ignored, in class order', () => {
+  assert.deepEqual(matchLoadout([
+    { weapon: 'Peacekeeper', damage: 400 },
+    { weapon: 'Other', damage: 900 },
+    { weapon: 'R-99', damage: 300 },
+    { weapon: 'Wingman', damage: 50 },
+  ]), ['R-99', 'Peacekeeper'], 'SMG before shotgun; Wingman (3rd) and grenades dropped');
+  assert.deepEqual(matchLoadout([{ weapon: 'Kraber', damage: 100 }]), ['Kraber']);
+  assert.deepEqual(matchLoadout([]), []);
+});
+
+test('loadoutStats groups matches by loadout with my numbers', () => {
+  const d = new Date(2026, 8, 20);
+  const data = dataset([
+    match('1', d, { kills: 4, deaths: 1 }), match('2', d, { kills: 2, deaths: 1 }), match('3', d, { kills: 9, deaths: 0 }),
+  ]);
+  data.weapons = [
+    { matchId: '1', weapon: 'R-99', kills: 3, knocks: 3, damage: 700 },
+    { matchId: '1', weapon: 'Peacekeeper', kills: 1, knocks: 1, damage: 300 },
+    { matchId: '2', weapon: 'Peacekeeper', kills: 2, knocks: 2, damage: 500 },
+    { matchId: '2', weapon: 'R-99', kills: 0, knocks: 0, damage: 100 },
+    { matchId: '3', weapon: 'Kraber', kills: 9, knocks: 9, damage: 1500 },
+  ];
+  const rows = loadoutStats(data, data.matches, 1);
+  assert.deepEqual(rows.map((r) => [r.weapons.join('+'), r.games]), [['R-99+Peacekeeper', 2], ['Kraber', 1]]);
+  assert.equal(rows[0].me.kd, 3);
+});

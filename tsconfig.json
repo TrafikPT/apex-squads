@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "sourceMap": true,
+    "types": [
+      "node",
+      "@overwolf/ow-electron"
+    ]
+  },
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "src/ui"
+  ]
+}
