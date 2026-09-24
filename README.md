@@ -81,6 +81,14 @@ The preview shows the real (anonymized) matches in `fixtures/recordings/`.
 `APEX_UI_QUERY="data=sample"` shows the generated sample data instead. The
 real app (`npm start`) shows what it recorded, or sample data until then.
 
+## Kill/death popup
+```bash
+npm run popup:preview   # replays your latest recorded match's popups, 4 s apart
+```
+The preview uses made-up ranks (it never calls the API: fixture IDs are
+fake). `APEX_REPLAY_MATCH=<match id>` picks another match. In the real app
+(`npm start`) the popups use `APEX_STATUS_API_KEY` for ranks; see DESIGN.md §12.
+
 Launching Electron from VS Code's terminal on Windows can fail with
 `Cannot read properties of undefined (reading 'whenReady')`: VS Code sets
 `ELECTRON_RUN_AS_NODE`. Clear it first (`Remove-Item Env:ELECTRON_RUN_AS_NODE`).

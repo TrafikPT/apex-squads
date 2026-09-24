@@ -14,6 +14,7 @@ export type RecordKind =
   | 'info' // GEP new-info-update
   | 'info_snapshot' // result of gep.getInfo()
   | 'rp_snapshot' // apexlegendsstatus API response
+  | 'player_lookup' // apexlegendsstatus lookup of another player (kill/death popups)
   | 'lifecycle'; // app/game/GEP status (startup, game detected, errors...)
 
 export interface RecordLine {
@@ -35,9 +36,12 @@ export interface Sink {
   write(line: RecordLine): void;
 }
 
+/** A player to look up: by EA ID (`origin_id` in the roster) when known; names often aren't found. */
+export type PlayerQuery = { uid: string } | { name: string };
+
 export interface RankFetcher {
   /** Returns the raw API response; throws on network/HTTP failure. */
-  fetchPlayer(playerName: string): Promise<{ status: number; body: unknown }>;
+  fetchPlayer(query: PlayerQuery): Promise<{ status: number; body: unknown }>;
 }
 
 export interface GepMessage {
@@ -79,6 +83,8 @@ export class Recorder {
   /** A match ended and no new one started yet: post-match snapshots cover the lobby. */
   private afterMatch = false;
   private playerName: string | null = null;
+  /** My EA ID, from the roster entry flagged local; the API finds players by it, not by name. */
+  private playerUid: string | null = null;
   private pendingRp: unknown[] = [];
 
   constructor(
@@ -99,6 +105,8 @@ export class Recorder {
       this.onPhase(asString(msg.value));
     } else if (msg.category === 'me' && msg.key === 'name') {
       this.onPlayerName(asString(msg.value));
+    } else if (msg.key.startsWith('roster_')) {
+      this.onRoster(msg.value);
     }
   }
 
@@ -112,6 +120,11 @@ export class Recorder {
 
   lifecycle(key: string, value: unknown = null): void {
     this.write('lifecycle', { feature: null, key, value });
+  }
+
+  /** An API lookup of another player; `key` is their EA ID so history can find every lookup of them. */
+  playerLookup(uid: string, value: unknown): void {
+    this.write('player_lookup', { feature: null, key: uid, value });
   }
 
   /** Cancel pending RP snapshots (call on shutdown). */
@@ -162,6 +175,19 @@ export class Recorder {
     }
   }
 
+  private onRoster(value: unknown): void {
+    let p: unknown = value;
+    try {
+      if (typeof value === 'string') p = JSON.parse(value);
+    } catch {
+      return;
+    }
+    if (!p || typeof p !== 'object') return;
+    const r = p as { is_local?: unknown; origin_id?: unknown; platform_id?: unknown };
+    const uid = r.origin_id || r.platform_id;
+    if ((r.is_local === '1' || r.is_local === true) && typeof uid === 'string' && uid) this.playerUid = uid;
+  }
+
   private cancelPendingRp(): void {
     for (const handle of this.pendingRp) this.clock.clearTimeout(handle);
     this.pendingRp = [];
@@ -169,10 +195,11 @@ export class Recorder {
 
   private async snapshotRp(trigger: RpTrigger): Promise<void> {
     const playerName = this.playerName;
-    if (!this.rank || !playerName) return;
-    const base = { trigger, player_name: playerName };
+    const playerUid = this.playerUid;
+    if (!this.rank || (!playerName && !playerUid)) return;
+    const base = { trigger, player_name: playerName, player_uid: playerUid };
     try {
-      const { status, body } = await this.rank.fetchPlayer(playerName);
+      const { status, body } = await this.rank.fetchPlayer(playerUid ? { uid: playerUid } : { name: playerName! });
       this.write('rp_snapshot', { feature: null, key: trigger, value: { ...base, status, body } });
     } catch (err) {
       this.write('rp_snapshot', {

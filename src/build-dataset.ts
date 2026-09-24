@@ -101,7 +101,7 @@ export function buildDataset(lines: RecordLine[]): BuildResult {
       matches,
       teammates,
       weapons,
-      seasonStart: seasonStart(matches, seasons),
+      seasonStart: apiSeasonStart(lines) ?? seasonStart(matches, seasons),
     },
     incomplete,
   };
@@ -342,13 +342,32 @@ function statsSnapshots(lines: RecordLine[], key: string): StatsSnapshot[] {
 }
 
 /**
- * GEP gives the season number but not its dates: the season starts, as far as
- * we know, at the first recorded match of the latest season seen.
+ * Start of the current ranked split, from the newest RP snapshot that has it
+ * (apexlegendsstatus `global.rank.rankedSeasonMeta.start`, in epoch seconds).
+ */
+function apiSeasonStart(lines: RecordLine[]): string | null {
+  let best: { at: string; start: number } | null = null;
+  for (const l of lines) {
+    if (l.kind !== 'rp_snapshot') continue;
+    const body = (l.value as { body?: { global?: { rank?: { rankedSeasonMeta?: { start?: number } } } } } | null)?.body;
+    const start = body?.global?.rank?.rankedSeasonMeta?.start;
+    if (typeof start === 'number' && (!best || l.received_at > best.at)) best = { at: l.received_at, start };
+  }
+  return best ? localDay(new Date(best.start * 1000)) : null;
+}
+
+/**
+ * Without an RP snapshot, GEP gives the season number but not its dates: the
+ * season starts, as far as we know, at the first recorded match of the latest
+ * season seen.
  */
 function seasonStart(matches: MatchFact[], seasons: Map<string, number>): string {
   const latest = Math.max(...seasons.values());
   const first = matches.find((m) => seasons.get(m.matchId) === latest) ?? matches[0];
-  const d = first ? new Date(first.startedAt) : new Date();
+  return localDay(first ? new Date(first.startedAt) : new Date());
+}
+
+function localDay(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }

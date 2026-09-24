@@ -4,7 +4,7 @@
  * local player and an explicit keep-list stay as they are. The same person
  * gets the same alias in every file, so squad and teammate stats still work.
  */
-import { baseName } from './game-names';
+import { baseName, isAnonymousName } from './game-names';
 import type { RecordLine } from './recorder';
 
 /** Payload fields holding a player name, per GEP key (`_N` = numbered keys). */
@@ -49,7 +49,8 @@ export function anonymize(lines: RecordLine[], keepNames: string[]): AnonymizeRe
   const idAlias = new Map<string, string>();
   const aliasName = (name: string): string => {
     const base = baseName(name);
-    if (!base || keep.has(base)) return name;
+    // Anonymous-mode names ("Fuse2676") are already made up by the game.
+    if (!base || keep.has(base) || isAnonymousName(base)) return name;
     let alias = nameAlias.get(base);
     if (!alias) nameAlias.set(base, (alias = `Player-${String(nameAlias.size + 1).padStart(3, '0')}`));
     // Keep the clan-tag shape ("[TAG] x" vs "[TAG]x"): parsing it is part of what the data tests.

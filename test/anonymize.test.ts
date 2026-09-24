@@ -43,6 +43,12 @@ test('others get one stable alias in every field and format; me and kept players
   assert.equal(JSON.parse(lines[6].value as string).targetName, 'Player-001');
 });
 
+test("anonymous-mode names are kept: the game already made them up", () => {
+  const feed = line('kill_feed', { local_player_name: '[T] Me', attackerName: 'Fuse2676', victimName: '[T]Me', action: 'kill' });
+  const { lines } = anonymize([...LINES, feed], ['Friend']);
+  assert.equal((lines[lines.length - 1].value as { attackerName: string }).attackerName, 'Fuse2676');
+});
+
 test('a name left behind anywhere is reported as a leak', () => {
   const extra = line('some_new_key', JSON.stringify({ who: 'Stranger' }));
   assert.deepEqual(anonymize([...LINES, extra], ['Friend']).leaks, ['Stranger']);

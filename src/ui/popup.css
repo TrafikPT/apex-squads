@@ -1,0 +1,54 @@
+/* Kill/death popup: same tokens as the dashboard (styles.css), on a transparent window. */
+:root {
+  color-scheme: dark;
+  --surface: rgba(23, 24, 27, 0.94);
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --border: rgba(255, 255, 255, 0.08);
+  --accent: #e8542a;
+  --good: #0ca30c;
+  --bad: #e66767;
+  --font: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Barlow Condensed", "Barlow", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: transparent; overflow: hidden; }
+body { font: 13px/1.4 var(--font); color: var(--text-primary); -webkit-font-smoothing: antialiased; user-select: none; }
+
+#popup { padding: 8px; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--bad);
+  border-radius: 8px;
+  padding: 10px 14px 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  animation: slide-in 180ms ease-out;
+}
+.card.you-killed { border-left-color: var(--good); }
+@keyframes slide-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+
+.moment {
+  font: 700 12px/1 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--bad); display: flex; justify-content: space-between;
+}
+.you-killed .moment { color: var(--good); }
+.demo { color: var(--text-muted); letter-spacing: 0.04em; }
+
+.name { font: 700 22px/1.2 var(--font-display); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank { color: var(--text-secondary); margin-top: 2px; }
+.rank .tier { color: var(--text-primary); font-weight: 600; }
+.peak { color: var(--accent); font-weight: 600; font-size: 12px; }
+.rank .unknown { color: var(--text-muted); }
+.meta, .history { color: var(--text-muted); font-size: 12px; }
+.match { margin-top: 6px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
+.chip {
+  font: 700 11px/1 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase;
+  color: #fff; background: var(--accent); border-radius: 4px; padding: 3px 6px;
+}
+.history { margin-top: 2px; }
+.knocked-by { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 12px; }
+.knocked-by .who { color: var(--text-secondary); font-weight: 600; }

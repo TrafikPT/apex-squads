@@ -8,8 +8,12 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import type { OverwolfGameEventPackage } from '@overwolf/ow-electron-packages-types';
 import { JsonlSink } from './jsonl-sink';
+import { PlayerHistory } from './player-history';
+import { PopupService } from './popup-service';
+import { PopupWindow } from './popup-window';
 import { ApexStatusClient } from './rank-client';
-import { APEX_GAME_ID, Recorder } from './recorder';
+import { readRecordings } from './recordings';
+import { APEX_GAME_ID, Recorder, type Sink } from './recorder';
 import { createMainWindow } from './window';
 
 const SET_FEATURES_ATTEMPTS = 10;
@@ -23,10 +27,33 @@ const startedAt = new Date();
 const sessionId = `${startedAt.toISOString().replace(/[:.]/g, '-')}_${crypto.randomBytes(3).toString('hex')}`;
 const dataDir =
   process.env.APEX_TRACKER_DATA_DIR || path.join(app.getPath('documents'), 'ApexTracker');
-const sink = new JsonlSink(path.join(dataDir, 'recordings'), `${sessionId}.jsonl`);
+const recordingsDir = path.join(dataDir, 'recordings');
 
+// Everything met in earlier sessions, for the popups' "met before" and peak rank.
+const history = new PlayerHistory();
+for (const line of readRecordings([recordingsDir])) history.add(line);
+
+const sink = new JsonlSink(recordingsDir, `${sessionId}.jsonl`);
 const apiKey = process.env.APEX_STATUS_API_KEY;
-const recorder = new Recorder(sessionId, sink, apiKey ? new ApexStatusClient(apiKey) : null);
+const rankClient = apiKey ? new ApexStatusClient(apiKey) : null;
+// Every recorded line also goes to the popups (kill/death cards).
+let popups: PopupService | null = null;
+const tee: Sink = {
+  write: (line) => {
+    sink.write(line);
+    popups?.onLine(line);
+  },
+};
+const recorder = new Recorder(sessionId, tee, rankClient);
+const popupWindow = new PopupWindow();
+popups = new PopupService({
+  history,
+  lookup: rankClient,
+  recordLookup: (uid, value) => recorder.playerLookup(uid, value),
+  show: (popup) => {
+    if (app.isReady()) popupWindow.show(popup);
+  },
+});
 
 if (!app.requestSingleInstanceLock()) {
   log('Another recorder is already running; exiting.');
@@ -58,7 +85,7 @@ if (!app.requestSingleInstanceLock()) {
     recorder.lifecycle('package_crashed', { can_recover: canRecover });
   });
 
-  app.whenReady().then(() => createMainWindow([path.join(dataDir, 'recordings')]));
+  app.whenReady().then(() => createMainWindow([recordingsDir]));
   // Closing the window must not stop recording: keep running until Ctrl+C (tray icon later).
   app.on('window-all-closed', () => undefined);
   app.on('before-quit', () => {

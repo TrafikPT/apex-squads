@@ -10,6 +10,24 @@ export function baseName(name: string): string {
   return name.replace(/^\[[^\]]*\]\s*/, '').trim();
 }
 
+/** Every legend's display name. Keep in step with ui/assets/legends (scripts/fetch-legend-portraits.mjs). */
+const LEGENDS = [
+  'Alter', 'Ash', 'Axle', 'Ballistic', 'Bangalore', 'Bloodhound', 'Catalyst', 'Caustic', 'Conduit', 'Crypto',
+  'Fuse', 'Gibraltar', 'Horizon', 'Lifeline', 'Loba', 'Mad Maggie', 'Mirage', 'Newcastle', 'Octane', 'Pathfinder',
+  'Rampart', 'Revenant', 'Seer', 'Sparrow', 'Valkyrie', 'Vantage', 'Wattson', 'Wraith',
+];
+const LEGEND_KEYS = new Set(LEGENDS.map((l) => l.toLowerCase().replace(/\s+/g, '')));
+
+/**
+ * Apex's anonymous mode shows a player to others as their legend plus four
+ * digits ("Fuse2676", "Mad Maggie1234"), and the roster never has that name:
+ * such players can't be identified or looked up (DESIGN.md §9.1).
+ */
+export function isAnonymousName(name: string): boolean {
+  const m = /^(.+?)\d{4}$/.exec(baseName(name));
+  return !!m && LEGEND_KEYS.has(m[1].toLowerCase().replace(/\s+/g, ''));
+}
+
 /** Codenames that differ from the display name. Artemis and overdrive are guesses (DESIGN.md §9.1). */
 const LEGEND_CODENAMES: Record<string, string> = {
   maggie: 'Mad Maggie',

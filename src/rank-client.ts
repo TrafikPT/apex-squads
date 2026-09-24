@@ -1,4 +1,4 @@
-import type { RankFetcher } from './recorder';
+import type { PlayerQuery, RankFetcher } from './recorder';
 
 /** apexlegendsstatus.com player lookup. Unofficial API: https://apexlegendsapi.com/ */
 export class ApexStatusClient implements RankFetcher {
@@ -7,9 +7,11 @@ export class ApexStatusClient implements RankFetcher {
     private readonly platform = 'PC',
   ) {}
 
-  async fetchPlayer(playerName: string): Promise<{ status: number; body: unknown }> {
+  /** By EA ID (roster `origin_id`) where possible: name searches often return "Player not found". */
+  async fetchPlayer(query: PlayerQuery): Promise<{ status: number; body: unknown }> {
     const url = new URL('https://api.apexlegendsstatus.com/bridge');
-    url.searchParams.set('player', playerName);
+    if ('uid' in query) url.searchParams.set('uid', query.uid);
+    else url.searchParams.set('player', query.name);
     url.searchParams.set('platform', this.platform);
 
     const res = await fetch(url, {

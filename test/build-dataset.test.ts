@@ -146,6 +146,13 @@ test('a match without a summary is left out and counted', () => {
   assert.equal(result.incomplete, 1);
 });
 
+test("the season starts on the API's split start date when an RP snapshot has it", () => {
+  const start = new Date(2026, 8, 15, 18).getTime() / 1000; // local 15 Sept
+  const snap = line(null, 'rp_snapshot', 'post_match', { body: { global: { rank: { rankedSeasonMeta: { start } } } } });
+  assert.equal(buildDataset([...oneMatch(), snap]).dataset.seasonStart, '2026-09-15');
+  assert.equal(buildDataset(oneMatch()).dataset.seasonStart, '2026-09-24', 'without one: the first recorded match');
+});
+
 test('the same session loaded twice counts once', () => {
   const lines = oneMatch([event('m1', 'kill', '1')]);
   const [m] = buildDataset([...lines, ...lines]).dataset.matches;

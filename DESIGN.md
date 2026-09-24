@@ -39,7 +39,9 @@ RP, broken down per match, per legend and per weapon.
 - Console support. Overwolf is Windows PC only.
 - Information about the rest of the lobby: opponents' names, ranks or kills
   (TRN's overlay shows this). This keeps us clear of game-policy questions
-  about competitive advantage.
+  about competitive advantage. _Exception (decided 2026-09-24):_ one popup
+  about the player who just killed me or whom I just killed (§12). Confirm
+  with Overwolf before release.
 - Any UI in the PoC: SQL queries are the interface. The overlay and
   dashboard are phase 3.
 - Anything that reads game memory or network traffic. Easy Anti-Cheat bans
@@ -204,6 +206,10 @@ What each `kind` carries:
 - `rp_snapshot`: `key` = trigger (`lobby`, `match_start`, `post_match`,
   `account_change`); `value` = `{player_name, status, body}` (the full API
   response) or `{player_name, error}`.
+- `player_lookup`: an API lookup of another player for the kill/death popup
+  (§12). `key` = their EA ID; `value` = `{name, status, global}` (only the
+  response's `global` object: name, level, rank) or `{name, error}`. These
+  lines are the history the popup's "peak rank seen" comes from.
 - `lifecycle`: session start/end, package ready or failed, game detected or
   exited, features registered, GEP errors. This is the recorder's health log.
 
@@ -470,8 +476,25 @@ ranked trios. Provider log only: no `info_snapshot`, no
 - Legend codenames: `#character_Artemis_NAME` (all 23 of my picks) is shown
   as **Sparrow** and `overdrive` as **Axle**: both **guesses**
   (`src/game-names.ts`), to confirm in game.
-- GEP gives the season number but not its dates, so the "Season" filter
-  starts at the first recorded match of the latest season.
+- GEP gives the season number but not its dates. The "Season" filter uses
+  the split start from an API RP snapshot (`rankedSeasonMeta.start`), else
+  the first recorded match of the latest season.
+
+**Other players (from building the kill/death popup):**
+- **Anonymous mode:** 164 of 3,520 kill feed names (4.7%) aren't in the
+  roster. All are a legend's name plus four digits (`Fuse2676`,
+  `Mad Maggie3990`): players in anonymous mode. They can't be identified or
+  looked up; the popup says so. The anonymizer keeps these names.
+- **apexlegendsstatus (Q9):** lookup by name fails ("Player not found") even
+  for me; lookup by `uid` works with the roster's `origin_id` (EA ID) and,
+  for Steam players, `platform_id`. The EA ID returns more (e.g. the "top %").
+  The response has current rank (tier, division, RP, split dates), level and
+  "top X%", but **no peak rank**: we keep our own (highest rank we've seen).
+  Tracker kills/K/D only count equipped trackers, so they aren't shown.
+- **Rank thresholds changed since Season 17:** the API calls 8,408 RP
+  Gold I and 8,642 RP Platinum IV, but `src/ui/ranks.ts` starts Platinum at
+  8,200. The popup uses the API's rank names; the dashboard's table needs the
+  current values (to find: in game, or inferred from `player_lookup` lines).
 
 Still open for our own recorder: 4–9, 11, and 1–3 re-checked on our data.
 
@@ -623,6 +646,24 @@ remove:
   gets small fast.
 - Only high-confidence stats. Medium-confidence ones (damage per weapon) are
   labelled as estimates.
+
+### Kill/death popup (built 2026-09-24, needs the overlay to show in game)
+A small card when **I'm killed** (the killer, plus whoever knocked me if that
+was someone else) and when **I kill** someone. Knocks don't show a card; they
+look the player up early so the card is ready. It shows:
+- their **current rank** (API), and the **peak rank we've seen** for them,
+  only when it's higher than the current one (from `player_lookup` lines);
+- level and "top X%" (API);
+- their kills and knocks **this match**, with **kill leader** from 3 kills;
+- history: matches shared before, how often they killed me or I killed them.
+
+Code: `src/encounters.ts` (when a popup fires, the card),
+`src/player-history.ts`, `src/popup-service.ts` (one lookup per player per
+session, recorded), `src/popup-window.ts` and `src/ui/popup.ts`.
+`npm run popup:preview` replays a recorded match with made-up ranks. The
+window is a plain always-on-top window for now, so it only shows over the
+game in borderless windowed mode; Overwolf's overlay replaces it once the
+app is approved. Without an API key the card shows no rank.
 
 ### Planned
 | Where | Feature |

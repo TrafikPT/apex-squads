@@ -7,6 +7,7 @@ import { JsonlSink } from '../src/jsonl-sink';
 import {
   Clock,
   POST_MATCH_DELAYS_S,
+  PlayerQuery,
   RankFetcher,
   Recorder,
   RecordLine,
@@ -55,10 +56,11 @@ class FakeClock implements Clock {
 }
 
 class FakeRank implements RankFetcher {
+  /** Name, or "uid:<id>" for lookups by ID. */
   calls: string[] = [];
   fail = false;
-  async fetchPlayer(name: string) {
-    this.calls.push(name);
+  async fetchPlayer(query: PlayerQuery) {
+    this.calls.push('uid' in query ? `uid:${query.uid}` : query.name);
     if (this.fail) throw new Error('boom');
     return { status: 200, body: { global: { rank: { rankScore: 1234 } } } };
   }
@@ -211,6 +213,28 @@ test('switching account in the lobby snapshots the new account', async () => {
   await flush();
   assert.deepEqual(rank.calls, ['Main', 'Smurf']);
   assert.equal(rpLines(sink)[1].key, 'account_change');
+});
+
+test('once the roster shows my EA ID, snapshots look me up by it instead of by name', async () => {
+  const { rank, clock, recorder, name, phase } = setup();
+  name('Player1');
+  phase('legend_selection');
+  recorder.onInfoUpdate({
+    feature: 'roster',
+    category: 'match_info',
+    key: 'roster_0',
+    value: JSON.stringify({ name: 'Player1', is_local: '1', platform_id: '765', origin_id: '101' }),
+  });
+  phase('match_summary');
+  clock.advance(0); // the first post-match snapshot
+  await flush();
+  assert.deepEqual(rank.calls, ['Player1', 'uid:101']);
+});
+
+test('player lookups are recorded under the looked-up player ID', () => {
+  const { sink, recorder } = setup();
+  recorder.playerLookup('101', { status: 200 });
+  assert.deepEqual([sink.lines[0].kind, sink.lines[0].key], ['player_lookup', '101']);
 });
 
 test('API failures are recorded, not thrown', async () => {
