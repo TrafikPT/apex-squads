@@ -204,7 +204,20 @@ test('JsonlSink writes one parseable line per record', () => {
   const recorder = new Recorder('s1', sink, null, new FakeClock());
   recorder.lifecycle('a');
   recorder.onGameEvent({ feature: 'kill_feed', key: 'kill_feed', value: 'line\nbreak' });
+  sink.close();
   const lines = fs.readFileSync(sink.filePath, 'utf8').trimEnd().split('\n');
   assert.equal(lines.length, 2);
   assert.equal(JSON.parse(lines[1]).value, 'line\nbreak');
+  assert.throws(() => sink.write(JSON.parse(lines[0])), /closed/);
+});
+
+test('JsonlSink appends to an existing file', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'apex-tracker-'));
+  fs.writeFileSync(path.join(dir, 'session.jsonl'), '{"existing":true}\n');
+  const sink = new JsonlSink(dir, 'session.jsonl');
+  new Recorder('s1', sink, null, new FakeClock()).lifecycle('a');
+  sink.close();
+  const lines = fs.readFileSync(sink.filePath, 'utf8').trimEnd().split('\n');
+  assert.deepEqual(JSON.parse(lines[0]), { existing: true });
+  assert.equal(JSON.parse(lines[1]).key, 'a');
 });
