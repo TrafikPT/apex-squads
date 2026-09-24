@@ -14,7 +14,9 @@ export function openMatch(matchId: string): void {
   expanded = matchId;
 }
 
-const COLUMNS = 8;
+const COLUMNS = 9;
+/** Chevron, legend, time and squad: the day's name spans these. */
+const LEAD_COLUMNS = 4;
 /** Matches rendered per "Show more" step; whole days are always shown. */
 const PAGE_SIZE = 100;
 let shown = PAGE_SIZE;
@@ -48,13 +50,20 @@ export function matchesView(ctx: ViewContext): ViewResult {
   for (const day of days) {
     if (rendered >= limit) break;
     rendered += day.matches.length;
+    // The day's averages sit under the columns they summarize; RP is the day's net.
     const s = day.summary;
-    body.append(el('tr', { class: 'day-row' }, el('td', { colspan: String(COLUMNS) },
-      el('span', { class: 'day-name' }, fmtLongDay(day.day)),
-      el('span', { class: 'day-sum' },
-        `${s.matches} ${s.matches === 1 ? 'match' : 'matches'} · avg ${place(s.avgPlacement)} · ${fixed(s.kd, 2)} K/D`),
-      s.rpNet === null ? '' : el('span', { class: `day-rp ${s.rpNet >= 0 ? 'good' : 'bad'}` }, `${signed(s.rpNet)} RP`),
-    )));
+    const dayStat = (text: string, title: string, cls = '') => el('td', { class: `num day-stat ${cls}`, title }, text);
+    body.append(el('tr', { class: 'day-row' },
+      el('td', { colspan: String(LEAD_COLUMNS) },
+        el('span', { class: 'day-name' }, fmtLongDay(day.day)),
+        el('span', { class: 'day-sum' }, `${s.matches} ${s.matches === 1 ? 'match' : 'matches'} · day averages`)),
+      dayStat(place(s.avgPlacement), 'Average placement'),
+      dayStat(fixed(s.kd, 2), "The day's K/D: all kills over all deaths"),
+      dayStat('', ''),
+      dayStat(s.avgDamage === null ? '–' : fmtInt(Math.round(s.avgDamage)), 'Average damage'),
+      s.rpNet === null ? dayStat('–', 'No RP data for this day')
+        : dayStat(`${signed(s.rpNet)} RP`, 'Net RP for the day', s.rpNet >= 0 ? 'good' : 'bad'),
+    ));
     for (const m of day.matches) {
       const open = expanded === m.matchId;
       const row = matchRow(ctx, m, open);
@@ -69,7 +78,7 @@ export function matchesView(ctx: ViewContext): ViewResult {
 
   const head = el('tr', {});
   for (const [label, num] of [['', false], ['Legend', false], ['Time', false], ['Squad', false], ['Place', true],
-    ['K / D / A / Kn', true], ['Damage', true], ['RP', true]] as const) {
+    ['K/D', true], ['K / D / A / Kn', true], ['Damage', true], ['RP', true]] as const) {
     head.append(el('th', { class: num ? 'num' : '' }, label));
   }
   const scroll = el('div', { class: 'table-scroll' }, el('table', { class: 'matches-table' }, el('thead', {}, head), body));
@@ -105,6 +114,8 @@ function matchRow(ctx: ViewContext, m: MatchFact, open: boolean): HTMLElement {
     el('td', {}, new Date(m.startedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })),
     squad,
     el('td', { class: 'num' }, el('span', { class: `place${m.placement === 1 ? ' win' : ''}` }, `#${m.placement}`)),
+    // Same rule as the K/D elsewhere: kills when there were no deaths.
+    el('td', { class: 'num' }, (m.kills / Math.max(m.deaths, 1)).toFixed(2)),
     el('td', { class: 'num' }, `${m.kills} / ${m.deaths} / ${m.assists} / ${m.knocks}`),
     el('td', { class: 'num' }, fmtInt(m.damage)),
     rpCell(m.rpDelta),

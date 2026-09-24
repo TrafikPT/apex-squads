@@ -234,7 +234,9 @@ tr.low-sample .bar { opacity: 0.4; }
 tbody .day-row:first-child td { padding-top: 6px; }
 .day-name { font: 700 14px/1 var(--font-display); letter-spacing: 0.06em; text-transform: uppercase; }
 .day-sum { color: var(--text-muted); font-size: 12px; margin-left: 12px; }
-.day-rp { float: right; font-weight: 600; font-size: 13px; }
+.day-row .day-stat { color: var(--text-muted); font-weight: 600; font-size: 13px; }
+.day-row .day-stat.good { color: var(--good); }
+.day-row .day-stat.bad { color: var(--bad); }
 
 .detail-row td { padding: 0 0 14px; background: var(--surface-2); border-bottom: 1px solid var(--grid); }
 .match-detail { padding: 4px 16px 0 40px; white-space: normal; }
