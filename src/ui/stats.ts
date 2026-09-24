@@ -197,6 +197,8 @@ export interface TeammateRow {
   /** Their numbers in the matches with me. */
   killsPerGame: number;
   knocksPerGame: number;
+  /** Their kills / their deaths (kill feed); their kills when they never died. */
+  kd: number;
   topLegend: string;
   /** My numbers in the matches with them. */
   me: Kpis;
@@ -205,15 +207,16 @@ export interface TeammateRow {
 /** One row per regular teammate in the selection, most games together first. */
 export function teammateStats(data: Dataset, matches: MatchFact[], regulars: Set<string>, minGames = 3): TeammateRow[] {
   const byId = new Map(matches.map((m) => [m.matchId, m]));
-  const acc = new Map<string, { matches: MatchFact[]; kills: number; knocks: number; legends: Map<string, number> }>();
+  const acc = new Map<string, { matches: MatchFact[]; kills: number; knocks: number; deaths: number; legends: Map<string, number> }>();
   for (const t of data.teammates) {
     const m = byId.get(t.matchId);
     if (!m || !regulars.has(t.playerKey)) continue;
     let a = acc.get(t.playerKey);
-    if (!a) acc.set(t.playerKey, (a = { matches: [], kills: 0, knocks: 0, legends: new Map() }));
+    if (!a) acc.set(t.playerKey, (a = { matches: [], kills: 0, knocks: 0, deaths: 0, legends: new Map() }));
     a.matches.push(m);
     a.kills += t.kills;
     a.knocks += t.knocks;
+    a.deaths += t.deaths;
     a.legends.set(t.legend, (a.legends.get(t.legend) ?? 0) + 1);
   }
   return [...acc]
@@ -223,6 +226,7 @@ export function teammateStats(data: Dataset, matches: MatchFact[], regulars: Set
       games: a.matches.length,
       killsPerGame: a.kills / a.matches.length,
       knocksPerGame: a.knocks / a.matches.length,
+      kd: a.kills / Math.max(a.deaths, 1),
       topLegend: [...a.legends].sort((x, y) => y[1] - x[1])[0][0],
       me: kpis(a.matches),
     }))

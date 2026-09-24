@@ -1,6 +1,6 @@
 import { el, svgEl } from '../dom';
 import type { MatchFact, TeammateFact, WeaponFact } from '../facts';
-import { fmtDateTime, fmtInt, place, signed } from '../format';
+import { fixed, fmtDateTime, fmtInt, place, signed } from '../format';
 import { legendBadge } from '../portraits';
 import { groupByDay, toLocalDay } from '../stats';
 import type { ViewContext, ViewResult } from './context';
@@ -52,7 +52,7 @@ export function matchesView(ctx: ViewContext): ViewResult {
     body.append(el('tr', { class: 'day-row' }, el('td', { colspan: String(COLUMNS) },
       el('span', { class: 'day-name' }, fmtLongDay(day.day)),
       el('span', { class: 'day-sum' },
-        `${s.matches} ${s.matches === 1 ? 'match' : 'matches'} · avg ${place(s.avgPlacement)} · ${s.avgKills?.toFixed(1)} kills`),
+        `${s.matches} ${s.matches === 1 ? 'match' : 'matches'} · avg ${place(s.avgPlacement)} · ${fixed(s.kd, 2)} K/D`),
       s.rpNet === null ? '' : el('span', { class: `day-rp ${s.rpNet >= 0 ? 'good' : 'bad'}` }, `${signed(s.rpNet)} RP`),
     )));
     for (const m of day.matches) {
@@ -69,7 +69,7 @@ export function matchesView(ctx: ViewContext): ViewResult {
 
   const head = el('tr', {});
   for (const [label, num] of [['', false], ['Legend', false], ['Time', false], ['Squad', false], ['Place', true],
-    ['K / A / Kn', true], ['Damage', true], ['RP', true]] as const) {
+    ['K / D / A / Kn', true], ['Damage', true], ['RP', true]] as const) {
     head.append(el('th', { class: num ? 'num' : '' }, label));
   }
   const scroll = el('div', { class: 'table-scroll' }, el('table', { class: 'matches-table' }, el('thead', {}, head), body));
@@ -105,7 +105,7 @@ function matchRow(ctx: ViewContext, m: MatchFact, open: boolean): HTMLElement {
     el('td', {}, new Date(m.startedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })),
     squad,
     el('td', { class: 'num' }, el('span', { class: `place${m.placement === 1 ? ' win' : ''}` }, `#${m.placement}`)),
-    el('td', { class: 'num' }, `${m.kills} / ${m.assists} / ${m.knocks}`),
+    el('td', { class: 'num' }, `${m.kills} / ${m.deaths} / ${m.assists} / ${m.knocks}`),
     el('td', { class: 'num' }, fmtInt(m.damage)),
     rpCell(m.rpDelta),
   );
@@ -155,12 +155,12 @@ function matchDetail(ctx: ViewContext, m: MatchFact, mates: TeammateFact[], guns
   const squadList = el('div', { class: 'squad-list' },
     el('div', { class: 'squad-member' }, legendBadge(m.legend),
       el('span', { class: 'squad-friend' }, account, el('span', { class: 'you' }, 'you')),
-      el('span', { class: 'member-stats' }, `${plural(m.kills, 'kill')} · ${plural(m.knocks, 'knock')}`)),
+      el('span', { class: 'member-stats' }, memberStats(m.kills, m.deaths, m.knocks))),
   );
   for (const t of mates) {
     squadList.append(el('div', { class: 'squad-member' }, legendBadge(t.legend),
       el('span', { class: ctx.regulars.has(t.playerKey) ? 'squad-friend' : 'squad-random' }, ctx.playerName(t.playerKey)),
-      el('span', { class: 'member-stats' }, `${plural(t.kills, 'kill')} · ${plural(t.knocks, 'knock')}`)));
+      el('span', { class: 'member-stats' }, memberStats(t.kills, t.deaths, t.knocks))));
   }
   const squad = section('Squad', squadList);
 
@@ -188,7 +188,10 @@ function section(title: string, ...children: (HTMLElement | string)[]): HTMLElem
 
 // ---------------------------------------------------------------- helpers
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+/** Short, like the weapon rows next to it, so it fits beside a long name. */
+function memberStats(kills: number, deaths: number, knocks: number): string {
+  return `${kills} K · ${deaths} D · ${knocks} Kn`;
+}
 
 function groupBy<T>(xs: T[], key: (x: T) => string): Map<string, T[]> {
   const out = new Map<string, T[]>();

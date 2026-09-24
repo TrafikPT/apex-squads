@@ -114,7 +114,7 @@ function squadsCard(ctx: ViewContext, squads: SquadRow[], baseline: Kpis, topLeg
       vsAverage(baseline, s.me),
       el('td', { class: 'num' }, pct(s.me.winRate)),
       el('td', { class: 'num' }, pct(s.me.top5Rate)),
-      el('td', { class: 'num' }, fixed(s.me.avgKills, 2)),
+      el('td', { class: 'num' }, fixed(s.me.kd, 2)),
       el('td', { class: 'num' }, damageText(s.me)),
       rpCell(rpPerMatch(s.me)),
     );
@@ -124,7 +124,7 @@ function squadsCard(ctx: ViewContext, squads: SquadRow[], baseline: Kpis, topLeg
   }
   card.append(el('div', { class: 'table-scroll' }, el('table', {},
     el('thead', {}, headRow([['Squad', false], ['Games', true], ['Avg place', true], ['vs avg', true], ['Wins', true],
-      ['Top 5', true], ['Your kills', true], ['Your dmg', true], ['RP/match', true]])),
+      ['Top 5', true], ['Your K/D', true], ['Your dmg', true], ['RP/match', true]])),
     body)), sampleNote(faded));
   return card;
 }
@@ -145,11 +145,11 @@ function teammatesCard(ctx: ViewContext, mates: TeammateRow[], baseline: Kpis): 
     const row = el('tr', {},
       el('td', {}, el('div', { class: 'who' }, legendBadge(t.topLegend), el('span', {}, name))),
       el('td', { class: 'num' }, String(t.games)),
-      el('td', { class: 'num' }, t.killsPerGame.toFixed(2)),
+      el('td', { class: 'num' }, t.kd.toFixed(2)),
       el('td', { class: 'num' }, t.knocksPerGame.toFixed(2)),
       el('td', { class: 'num' }, place(t.me.avgPlacement)),
       vsAverage(baseline, t.me),
-      el('td', { class: 'num' }, fixed(t.me.avgKills, 2)),
+      el('td', { class: 'num' }, fixed(t.me.kd, 2)),
       el('td', { class: 'num' }, damageText(t.me)),
       rpCell(rpPerMatch(t.me)),
     );
@@ -158,8 +158,8 @@ function teammatesCard(ctx: ViewContext, mates: TeammateRow[], baseline: Kpis): 
     body.append(row);
   }
   card.append(el('div', { class: 'table-scroll' }, el('table', {},
-    el('thead', {}, headRow([['Player', false], ['Games', true], ['Their kills', true], ['Their knocks', true],
-      ['Your place', true], ['vs avg', true], ['Your kills', true], ['Your dmg', true], ['RP/match', true]])),
+    el('thead', {}, headRow([['Player', false], ['Games', true], ['Their K/D', true], ['Their knocks', true],
+      ['Your place', true], ['vs avg', true], ['Your K/D', true], ['Your dmg', true], ['RP/match', true]])),
     body)), sampleNote(faded));
   return card;
 }

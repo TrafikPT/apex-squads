@@ -149,6 +149,7 @@ test('teammate stats: their kills per game, top legend, and my numbers with them
   assert.equal(f.playerKey, 'F');
   assert.equal(f.games, 3);
   assert.equal(f.killsPerGame, 2);
+  assert.equal(f.kd, 2, '6 kills over 3 deaths');
   assert.equal(f.topLegend, 'Lifeline');
   assert.equal(f.me.avgPlacement, 5, 'match 4 without F is excluded');
 });
