@@ -45,9 +45,12 @@ uv run --with duckdb python -c "import duckdb; c=duckdb.connect(); c.execute(ope
 
 ## Development
 ```bash
-npm test     # recorder logic tests; runs on any OS
+npm test         # recorder and stats tests; runs on any OS
 npm run build
+npm run lint     # ESLint; style otherwise follows .editorconfig (no Prettier)
+npm run ui:check # type-check the dashboard
 ```
+CI (`.github/workflows/ci.yml`) runs all of these on every push.
 
 ## Dashboard (sample data)
 ```bash

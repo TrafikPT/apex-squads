@@ -21,17 +21,22 @@
     "ui:build": "esbuild src/ui/app.ts --bundle --format=iife --target=es2020 --outdir=ui/dist --entry-names=app --loader:.woff2=file --loader:.woff=file",
     "ui:watch": "npm run ui:build -- --watch",
     "ui:check": "tsc -p tsconfig.ui.json",
-    "app:preview": "npm run build && npm run ui:build && electron dist/preview-main.js"
+    "app:preview": "npm run build && npm run ui:build && electron dist/preview-main.js",
+    "lint": "eslint ."
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@overwolf/ow-electron": "^42.7.1",
     "@overwolf/ow-electron-packages-types": "^1.1.11",
     "@types/node": "^24.9.0",
     "dotenv-cli": "^10.0.0",
     "electron": "^38.8.6",
     "esbuild": "^0.25.12",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0",
     "sharp": "^0.34.5",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.70.1"
   },
   "engines": {
     "node": ">=22.12.0"
