@@ -58,7 +58,7 @@ if (!app.requestSingleInstanceLock()) {
     recorder.lifecycle('package_crashed', { can_recover: canRecover });
   });
 
-  app.whenReady().then(() => createMainWindow());
+  app.whenReady().then(() => createMainWindow([path.join(dataDir, 'recordings')]));
   // Closing the window must not stop recording: keep running until Ctrl+C (tray icon later).
   app.on('window-all-closed', () => undefined);
   app.on('before-quit', () => {

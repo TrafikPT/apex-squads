@@ -13,6 +13,11 @@
   "include": [
     "src/recorder.ts",
     "src/jsonl-sink.ts",
+    "src/gep-log.ts",
+    "src/anonymize.ts",
+    "src/build-dataset.ts",
+    "src/game-names.ts",
+    "src/recordings.ts",
     "src/ui/facts.ts",
     "src/ui/mock-data.ts",
     "src/ui/stats.ts",

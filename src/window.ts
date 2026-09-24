@@ -3,14 +3,31 @@
  * Windows the native min/max/close buttons are overlaid on it; on macOS the
  * traffic lights sit inside it.
  */
-import { BrowserWindow, app } from 'electron';
+import { BrowserWindow, app, ipcMain } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
+import { buildDataset } from './build-dataset';
+import { readRecordings } from './recordings';
 
 const TITLE_BAR_HEIGHT = 40;
 const BACKGROUND = '#0e0f11';
 
-export function createMainWindow(): BrowserWindow {
+/** @param recordingsDirs where the dashboard's data comes from (every .jsonl in them). */
+export function createMainWindow(recordingsDirs: string[]): BrowserWindow {
+  ipcMain.removeHandler('apex:dataset');
+  ipcMain.handle('apex:dataset', () => {
+    // Rebuilt from the raw lines on every load, so stat fixes apply to all history.
+    const started = Date.now();
+    const lines = readRecordings(recordingsDirs);
+    const { dataset, incomplete } = buildDataset(lines);
+    console.log(
+      `Dataset: ${dataset.matches.length} matches from ${lines.length} lines in ${Date.now() - started} ms` +
+        (incomplete ? ` (${incomplete} incomplete matches left out)` : '') +
+        ` [${recordingsDirs.join(', ')}]`,
+    );
+    return dataset;
+  });
+
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -22,7 +39,12 @@ export function createMainWindow(): BrowserWindow {
     titleBarStyle: 'hidden',
     titleBarOverlay: { color: BACKGROUND, symbolColor: '#c3c2b7', height: TITLE_BAR_HEIGHT },
     trafficLightPosition: { x: 14, y: 13 },
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      preload: path.join(__dirname, 'preload.js'),
+    },
   });
 
   // Dev aid, handy with APEX_UI_SCREENSHOT: APEX_UI_QUERY="view=squads&squads=comps"

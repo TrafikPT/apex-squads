@@ -1,7 +1,6 @@
 /**
- * Gold-layer shapes the dashboard consumes (DESIGN.md §4.4). This is the
- * contract the DuckDB gold views must produce once silver/gold exist; until
- * then src/ui/mock-data.ts produces them.
+ * Gold-layer shapes the dashboard consumes (DESIGN.md §4.4). Produced from the
+ * recordings by src/build-dataset.ts, or by src/ui/mock-data.ts for sample data.
  */
 
 export type Mode = 'ranked' | 'pubs';

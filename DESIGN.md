@@ -1,6 +1,6 @@
 # Apex Tracker — Design
 
-Status: **draft v5**: recorder built (untested against the real game). Overwolf proposal submitted 2026-09-24; Plan B (OCR) designed in §11.
+Status: **draft v6**: recorder built; stats layer and dashboard running on 23 real matches imported from the Overwolf client's log (§9.1). Our recorder is still untested against the real game. Overwolf proposal submitted 2026-09-24; Plan B (OCR) designed in §11.
 Last updated: 2026-09-24
 
 A free, local-first companion app for Apex Legends (Windows PC, Overwolf) that records
@@ -109,10 +109,14 @@ this API instead.
 │                     recordings/<session>.jsonl  (landing zone)   │
 └──────────────────────────────────────┬───────────────────────────┘
                                        │ copy
-┌──────────── Mac (development) ───────▼──────────────────────────┐
-│  DuckDB views over the JSONL: bronze → silver → gold · tests     │
-└──────────────────────────────────────────────────────────────────┘
+                                       ▼
+          Stats layer (src/build-dataset.ts): silver → gold, in-app
+                                       ▼
+                         Dashboard (src/ui), gold facts
 ```
+Development happens on the Mac against `fixtures/recordings/` (anonymized
+real matches, in git). DuckDB over the JSONL (`sql/`) is for exploring raw
+lines.
 
 ### 3.1 Components
 
@@ -130,22 +134,27 @@ other jobs:
 Size: my rough guess is a few thousand events per match, on the order of
 1 MB per match. Recording every mode is cheap.
 
-**Stats layer.** DuckDB views that read the JSONL files directly (bronze →
-silver → gold). No database file to maintain and no loader job: queries always
-see every file in `recordings/`.
+**Stats layer.** `src/build-dataset.ts`, run by the app's main process each
+time the dashboard loads: it reads every JSONL file (bronze), groups lines
+into matches (silver) and builds the facts in `src/ui/facts.ts` (gold). No
+database file to maintain and no loader job. _Changed in v6 (2026-09-24):_
+this was planned as DuckDB SQL views, but the stats have to run inside the
+app on players' PCs, and DuckDB would be a native module there (§3.3).
+`sql/` stays for exploring the raw lines.
 
-**UI (phase 3).** Dashboard and overlay reading the gold views.
+**UI (phase 3).** Dashboard and overlay reading the gold facts through the
+preload bridge (`src/preload.ts`).
 
 ### 3.2 Principles
 1. **The recorder is simple.** It writes every GEP event and info update as
    it arrives, tagged with `pseudo_match_id`. It has no stat logic, so it
    rarely needs changes or redeploys to Windows.
-2. **All stat logic lives in SQL views** over the raw lines (bronze →
-   silver → gold). If we fix a definition, all history is recomputed
-   automatically.
+2. **All stat logic lives in the stats layer** (`src/build-dataset.ts`),
+   recomputed from the raw lines on every load. If we fix a definition, all
+   history is recomputed automatically.
 3. **Replay = the recordings themselves.** Recorded matches are the test
-   fixtures, and the views can be developed and tested on the Mac with no
-   game running.
+   fixtures (`fixtures/recordings/`, anonymized), and the stats can be
+   developed and tested on the Mac with no game running.
 4. **Record everything, filter late.** All modes are recorded, and the
    ranked filter lives in the views.
 5. **Silver is source-agnostic.** Each capture source (Overwolf GEP, screen
@@ -159,8 +168,8 @@ see every file in `recordings/`.
 | App runtime | **ow-electron** 42.x (`@overwolf/ow-electron`) | GEP is a JS API. ow-electron supports Apex GEP (game ID 21566) and the overlay (for phase 3). |
 | Language | TypeScript | Type safety on event payloads |
 | Storage | **JSONL files**, one per session | No native modules in the Electron app (these are a common Windows build problem). A crash loses at most the line being written. Easy to copy. |
-| Stats | **DuckDB** views reading the JSONL | `read_json` over a glob, JSON operators, and **`ASOF JOIN`**, which is exactly "damage → weapon in use at that moment". |
-| RP | apexlegendsstatus API via `fetch` | The only RP source that doesn't read the screen |
+| Stats | **TypeScript** in the main process (`src/build-dataset.ts`) | Runs in the app with no native module; unit tested on real fixtures. DuckDB (`sql/`) for ad-hoc exploration only. |
+| RP | GEP `player_stats_br_ranked_latest.rank_score` (§9.1); apexlegendsstatus API via `fetch` as a backup | GEP's own season stats carry RP; the API is unofficial |
 | Code transfer | Private GitHub repo | Mac for development ↔ Windows for running |
 
 _Changed in v4:_ SQLite (via `better-sqlite3`) was replaced by JSONL + DuckDB,
@@ -308,9 +317,9 @@ WHERE is_ranked AND date >= date_trunc('month', current_date);
 | **Comp** | my legend + both teammates' `legendSelect` | The set of 3 legends, whoever played which. **Full premades only** (both teammates are regulars). Team kills = mine + teammates' from the kill feed; team K/D = team kills / team deaths (teammate deaths from the kill feed). RP is only mine. Team damage needs the summary-screen OCR (§11). | High, except team damage (n/a under GEP) |
 | Revives received | `revive.healed_from_ko` | Count | High |
 | Respawned | `revive.respawn` | Count | High |
-| **Revives given** | `player_stats_br_ranked_latest.teammates_revived` | Difference between the last snapshot before the match and the first one after it | Depends on refresh timing (spike Q7) |
-| **RP delta** | `rp_snapshot` lines | First changed `rankScore` after the match − last value before it (same account). If RP only changed after several matches, the change is assigned to that group of matches. | Medium (API lag; back-to-back matches) |
-| **RP after** | `rp_snapshot` lines | The first changed `rankScore` after the match (same account). Tier and division come from the thresholds in `src/ui/ranks.ts` (Season 17 table), checked at each season start | Medium (API lag) |
+| **Revives given** | `player_stats_br_ranked_latest.teammates_revived` (pubs: `_unranked_latest`) | Difference between the last snapshot before the match ends and the first one after it with one more game. 0 when the snapshots don't bracket exactly one game | High when bracketed (refreshes between matches, §9.1) |
+| **RP delta** | `player_stats_br_ranked_latest.rank_score` | Same bracketing as revives given: only when `games` went up by exactly one, same season. Otherwise null (e.g. the last match before quitting, or unrecorded matches in between). `rp_snapshot` lines from the API are not used yet | High when bracketed |
+| **RP after** | same | `rank_score` of the "after" snapshot. Tier and division come from the thresholds in `src/ui/ranks.ts` (Season 17 table), checked at each season start | High when bracketed |
 | Is ranked | `match_info.game_mode` | Value TBD (spike Q1) | — |
 | Teammates in a match | `team.teammate_X` + `roster` (teammate flag, platform ID) | Stable `player_key` from the roster ID, not the name | High (spike Q10) |
 | Teammate legend | `team.legendSelect_X` | — | High |
@@ -333,16 +342,25 @@ lobby ──► loading_screen ──► legend_selection ──► aircraft ─
   └──────────────── match_summary ◄───── (knocked ⇄ alive, death, respawn) ◄──┘
 ```
 
-The recorder uses phases only for these side effects (implemented and tested
+In real sessions the phase rarely returns to `lobby` between matches: GEP
+goes `match_summary → loading_screen → legend_selection` (20 of 23 matches in
+the imported logs, §9). So the recorder delimits matches with the **in-match
+phases** (`legend_selection`, `aircraft`, `freefly`, `landed`), not with
+`lobby`. It uses phases only for these side effects (implemented and tested
 in `src/recorder.ts`):
-- Entering **`lobby` after a match** → RP snapshots at 0, 30, 90, 180 and
-  300 s, so the API has time to catch up (`post_match`).
-- Entering **`lobby` otherwise** (app start), or `me.name` appearing or
-  changing in the lobby → one snapshot (`lobby` / `account_change`).
-- **Leaving the lobby** (queued into a match) → cancel pending post-match
-  snapshots and take one final `match_start` snapshot, the "before" value.
+- **Leaving the in-match phases** (to `match_summary`, or quitting straight to
+  `loading_screen` / `lobby`) → RP snapshots at 0, 30, 90, 180 and 300 s, so
+  the API has time to catch up (`post_match`).
+- **Entering the in-match phases** (queued into a match, or the app started
+  mid-match) → cancel pending post-match snapshots and take one `match_start`
+  snapshot, the "before" value. RP only moves when a match ends, so a
+  mid-match snapshot is still a valid "before".
+- Entering **`lobby` other than after a match** (app start), or `me.name`
+  appearing or changing in the lobby → one snapshot (`lobby` /
+  `account_change`).
 - Every phase change → an `info_snapshot` of the full game state.
-- Entering `lobby` also clears the current match id.
+- Entering `lobby` also clears the current match id. GEP clears
+  `pseudo_match_id` itself at match end anyway.
 
 Match grouping itself comes from `pseudo_match_id`, not from our own state
 machine.
@@ -394,8 +412,8 @@ Answers go into §9 of this document.
 |---|---|---|
 | 0. Setup | Overwolf app proposal (https://dev.overwolf.com/app-idea-form/) and approval → Dev Console API key. apexlegendsstatus API key. Windows: Node 22.12+, Git. | 1 evening + **waiting for Overwolf approval** |
 | 1. Recorder spike | ~~Build the recorder~~ (done: `src/`, 10 tests passing, untested against the real game). Run it on Windows and play ~10 ranked matches. | Play time |
-| 2. PoC stats | Silver/gold views, validated against in-game summaries | 1–2 weekends |
-| 3. UI | Dashboard window + in-game overlay. **Dashboard done on sample data (2026-09-24):** Overview, Squads, Matches (expandable details), Legends, Weapons, sharing one filter bar; `npm run app:preview`. Still to do: Settings, overlay, real data source, and the backlog in §12. | 2–3 weekends |
+| 2. PoC stats | Silver/gold, validated against in-game summaries. **First version done (2026-09-24):** `src/build-dataset.ts`, tested on 23 real matches (kills/assists equal the final scoreboard; per-weapon totals add up). Still to check against in-game summaries. | 1–2 weekends |
+| 3. UI | Dashboard window + in-game overlay. **Dashboard done (2026-09-24):** Overview, Squads, Matches (expandable details), Legends, Weapons, sharing one filter bar; shows the recordings (sample data only when there are none); `npm run app:preview`. Still to do: Settings, overlay, and the backlog in §12. | 2–3 weekends |
 
 Workflow: code on the Mac → push to a private GitHub repo → pull on Windows
 to run. Recorded JSONL files come back to the Mac (copied into `recordings/`,
@@ -405,7 +423,57 @@ which git ignores) for stats development.
 
 ## 9. Spike findings
 
-_Empty until phase 1 runs._
+### 9.1 Preliminary: from the Overwolf client's GEP log (2026-09-24)
+While our app waits for approval, the Overwolf client's own GEP log (written
+while the TRN Apex Legends Tracker app ran) was replayed through `Recorder`
+with `npm run import:gep-log` (README). 23 matches, 2 days, one account, all
+ranked trios. Provider log only: no `info_snapshot`, no
+`rp_snapshot`, and no feature that no installed app requested. It covers
+`inventory`, `player_stats`, `kill_feed`, `roster` and `team`.
+
+| Q | Finding |
+|---|---|
+| 1 | Ranked: `game_mode = "#GAME_MODE_RANKED"`, `mode_name = "Ranked"`. In the lobby `"#PL_TRIO"` / `"Trio"` comes first and is then replaced; pubs not seen yet. **Sent only when it changes, in the lobby** (10 updates for 23 matches) and cleared at match end, so a match's mode is the last non-null value before it in the session. |
+| 2 | `kill` / `assist` event counts equal the final `tabs` kills / assists in all 23 matches. Sum of `damage` events equals `me.totalDamageDealt` exactly. `tabs.damage` differs by a few % either way, so it is not the same number. |
+| 3 | `inUse` updates often (1,449 in 23 matches). Values: display names (`"R-301 Carbine"`), plus `Melee`, `Health/Shield`, `Knockdown Shield`, some internal ids (`mp_weapon_charge_gauntlet`) and `""`. **The kill feed uses a different scheme** (`r301`, `hemlok_takeover`), so per-weapon views need a mapping between the two. |
+| 10 | `roster` has `isTeammate`, `is_local`, `platform_id`, `origin_id` for everyone. The kill feed covers the whole lobby (1,767 entries), so teammate kills are countable. Legend names come as `#character_octane_NAME`. |
+| 11 | **No `location` or `ring` updates at all**, although an app requested both. The Maps tab (§12) is at risk; confirm with our own recorder. |
+| 12 | Kill feed present; `action` includes abilities (`Knuckle Cluster`, `The Ring`...) and `Bleed_out` with an empty `weaponName`. |
+
+**Match boundaries (affects silver):**
+- The phase goes `match_summary → loading_screen → legend_selection` between
+  matches, skipping `lobby`. The recorder's RP triggers relied on `lobby` and
+  would have fired for only 3 of 23 matches; fixed (§6).
+- `pseudo_match_id` arrives only at `match_start` (after the drop starts) and
+  is cleared at match end. Everything before it has `match_id = null`: **all
+  `legendSelect_X` lines**, the map, the mode, and part of the roster and
+  teammates. Silver attaches those lines to the **next** `match_id` in the
+  same session, if no match ended in between (`splitMatches` in
+  `src/build-dataset.ts`). `match_summary` and `victory` do arrive inside the
+  match.
+- `map_name` is `"UNKNOWN"` for World's Edge; `map_id`
+  (`mp_rr_desertlands_mu5`) is always set, so key the map on `map_id`.
+- `victory` was null in every match (no wins in the sample); still to check.
+
+**Stats (from building the stats layer on this data):**
+- **RP is in GEP.** `player_stats_br_ranked_latest` carries `rank_score`
+  (RP), `games`, `season` and `teammates_revived`, and refreshes between
+  matches. Snapshots on either side of a match give its RP change and revives
+  given with no API (§5). The ranked `games` count also shows **7 ranked
+  matches missing from the log** on 24 Sept (144 → 151 between 11:12 and
+  14:29): matches played while nothing was logging.
+- `kill` and `assist` events carry the running total (1, 2, 3...).
+  `knockdown`, `death`, `healed_from_ko` carry nothing: count them.
+- Kill feed kills per weapon add up to the `kill` events once bleed-outs and
+  finishers (no weapon) go to the gun that knocked that player. Abilities
+  appear as `action` with an empty weapon.
+- Legend codenames: `#character_Artemis_NAME` (all 23 of my picks) is shown
+  as **Sparrow** and `overdrive` as **Axle**: both **guesses**
+  (`src/game-names.ts`), to confirm in game.
+- GEP gives the season number but not its dates, so the "Season" filter
+  starts at the first recorded match of the latest season.
+
+Still open for our own recorder: 4–9, 11, and 1–3 re-checked on our data.
 
 ---
 
@@ -426,8 +494,12 @@ _Empty until phase 1 runs._
   one per project/person. Their terms require the credit "Data provided by
   Apex Legends Status" if we show their leaderboard data (not needed for a
   personal DB).
-- **Transferring recordings**: copied manually for now. Committing them to
-  the private repo is possible later if copying gets tedious.
+- **Transferring recordings** (decided 2026-09-24): recordings for
+  development are committed **anonymized** in `fixtures/recordings/`
+  (`import:gep-log --anonymize`): other players become `Player-NNN` with fake
+  IDs, and only my accounts and friends passed with `--keep` stay
+  recognizable. The importer refuses to write if any original name or ID is
+  left. Raw recordings stay out of git (`recordings/` is ignored).
 - **Recorder autostart and tray icon**: deferred; the PoC runs in a terminal.
 - **Overlay tech** (phase 3): not designed yet.
 - **Legend portraits** (resolved 2026-09-24): EA's content policy lets fans
@@ -590,5 +662,5 @@ remove:
 | Goal tracking | Settings UI and state for little value; "games to next rank" covers the main goal |
 | SQL console | Almost no user would query the data; CSV export covers it |
 | Scheduled job to fetch new legend portraits | New legends come about 4 times a year; a wiki scraper breaks silently. The app already shows a short code when a portrait is missing; rerun the script by hand |
-| Silver/gold SQL before the spike | Would be written against guessed payloads. `src/ui/facts.ts` is the gold contract meanwhile |
+| Silver/gold as SQL views | Needs DuckDB inside the app (a native module). Built in TypeScript instead, against real payloads (§3.1) |
 | Prettier | Would reformat the hand-laid-out `el(...)` trees in the UI. ESLint + `.editorconfig` only |

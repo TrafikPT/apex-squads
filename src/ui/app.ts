@@ -9,6 +9,7 @@ import '@fontsource/barlow-condensed/600.css';
 import '@fontsource/barlow-condensed/700.css';
 import './styles.css';
 import { el, svgEl } from './dom';
+import './bridge';
 import type { Account, Dataset } from './facts';
 import { uniqueSorted } from './format';
 import { generateMockData } from './mock-data';
@@ -39,20 +40,45 @@ const NAV: [View, string, string][] = [
 ];
 const SETTINGS_ICON = 'M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4';
 
-const data: Dataset = generateMockData();
-const names = new Map(data.players.map((p) => [p.playerKey, p.name]));
-const squadOf = teammateIndex(data);
-const regulars = regularPlayers(data);
-const teammateChips = frequentTeammates(data, data.matches, 6);
+// Set once by start(), before the first render.
+let data: Dataset;
+let sample: boolean;
+let names: Map<string, string>;
+let squadOf: Map<string, Set<string>>;
+let regulars: Set<string>;
+let teammateChips: { playerKey: string; games: number }[];
 
 let filters: Filters = { ...DEFAULT_FILTERS };
 const params = new URLSearchParams(location.search);
 const VIEWS: View[] = ['overview', 'squads', 'weapons', 'legends', 'matches', 'settings'];
 let view: View = VIEWS.find((v) => v === params.get('view')) ?? 'overview';
-// ?match=<id> or ?match=latest opens that match's details (dev aid for screenshots).
-const matchParam = params.get('match');
-if (matchParam) {
-  openMatch(matchParam === 'latest' ? [...data.matches].sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0].matchId : matchParam);
+
+/** Stats from the recordings via the app (src/preload.ts); sample data when there are none, or with ?data=sample. */
+async function loadData(): Promise<{ data: Dataset; sample: boolean }> {
+  if (params.get('data') !== 'sample' && window.apex) {
+    try {
+      const real = await window.apex.loadDataset();
+      if (real.matches.length) return { data: real, sample: false };
+    } catch (err) {
+      console.error('Could not load the recordings; showing sample data.', err);
+    }
+  }
+  return { data: generateMockData(), sample: true };
+}
+
+async function start(): Promise<void> {
+  ({ data, sample } = await loadData());
+  names = new Map(data.players.map((p) => [p.playerKey, p.name]));
+  squadOf = teammateIndex(data);
+  regulars = regularPlayers(data);
+  teammateChips = frequentTeammates(data, data.matches, 6);
+  // ?match=<id> or ?match=latest opens that match's details (dev aid for screenshots).
+  const matchParam = params.get('match');
+  if (matchParam) {
+    openMatch(matchParam === 'latest' ? [...data.matches].sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0].matchId : matchParam);
+  }
+  render();
+  window.addEventListener('resize', () => render());
 }
 
 const root = document.getElementById('app')!;
@@ -113,7 +139,7 @@ function titleBar(): HTMLElement {
   return el('header', { class: 'titlebar' },
     mark,
     el('span', { class: 'name' }, 'Apex Squads'),
-    el('span', { class: 'pill' }, 'Sample data'),
+    ...(sample ? [el('span', { class: 'pill' }, 'Sample data')] : []),
     el('span', { class: 'status' }, el('span', { class: 'dot' }), 'Waiting for Apex Legends'),
   );
 }
@@ -216,5 +242,4 @@ function rankText(a: Account): string {
   return a.rank ? rankName(a.rank.tier, a.rank.division) : '–';
 }
 
-render();
-window.addEventListener('resize', () => render());
+void start();

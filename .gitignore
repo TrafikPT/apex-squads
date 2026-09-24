@@ -3,5 +3,5 @@ dist/
 dist-test/
 .env
 *.log
-recordings/
+/recordings/
 ui/dist/

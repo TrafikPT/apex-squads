@@ -1,8 +1,9 @@
 # Apex Tracker
 
 A personal Apex Legends match recorder. It is phase 1 of [DESIGN.md](DESIGN.md):
-a background app that saves every Overwolf game event to JSONL files. Stats are
-computed separately, as DuckDB SQL views over those files (`sql/`).
+a background app that saves every Overwolf game event to JSONL files. The
+dashboard's stats are computed from those files in the app
+(`src/build-dataset.ts`); `sql/` has DuckDB queries for exploring them.
 
 ## Run it on the Windows PC
 
@@ -43,6 +44,24 @@ uv run --with duckdb python -c "import duckdb; c=duckdb.connect(); c.execute(ope
 ```
 `sql/spike.sql` has the queries for the spike questions in DESIGN.md §7.
 
+### Real data without our recorder
+The Overwolf client logs every game event it hands to apps (for example
+while another Apex app like TRN's tracker runs). This replays that log
+through our `Recorder` into `recordings/`, one file per Overwolf session:
+```powershell
+npm run import:gep-log                     # reads %LOCALAPPDATA%\Overwolf\Log\Apps\Overwolf General GameEvents Provider
+node dist/import-gep-log.js "<log folder or files>" --out recordings   # other paths (npm mangles spaces)
+```
+Overwolf rotates these logs after a few sessions, so copy them somewhere
+first. They lack info snapshots and API RP snapshots (see DESIGN.md §9.1).
+
+Plain recordings contain other players' names and IDs: keep them out of git.
+To add matches to the anonymized set in git (`fixtures/recordings/`), import
+with `--anonymize`, keeping friends by name (you are always kept):
+```powershell
+node dist/import-gep-log.js "<log folder>" --out fixtures/recordings --anonymize --keep santoznma
+```
+
 ## Development
 ```bash
 npm test         # recorder and stats tests; runs on any OS
@@ -52,8 +71,16 @@ npm run ui:check # type-check the dashboard
 ```
 CI (`.github/workflows/ci.yml`) runs all of these on every push.
 
-## Dashboard (sample data)
+## Dashboard
 ```bash
 npm run app:preview     # the app window, without Overwolf (works on macOS)
 npm run ui:watch        # rebuild the UI on save; reload the window with Cmd/Ctrl+R
 ```
+The preview shows the real (anonymized) matches in `fixtures/recordings/`.
+`APEX_RECORDINGS_DIR=<folder>` points it at other recordings, and
+`APEX_UI_QUERY="data=sample"` shows the generated sample data instead. The
+real app (`npm start`) shows what it recorded, or sample data until then.
+
+Launching Electron from VS Code's terminal on Windows can fail with
+`Cannot read properties of undefined (reading 'whenReady')`: VS Code sets
+`ELECTRON_RUN_AS_NODE`. Clear it first (`Remove-Item Env:ELECTRON_RUN_AS_NODE`).
