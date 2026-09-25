@@ -1,4 +1,4 @@
-/* Kill/death popup: same tokens as the dashboard (styles.css), on a transparent window. */
+/* Popups: same tokens as the dashboard (styles.css), on a transparent window. */
 :root {
   color-scheme: dark;
   --surface: rgba(23, 24, 27, 0.94);
@@ -29,6 +29,7 @@ body { font: 13px/1.4 var(--font); color: var(--text-primary); -webkit-font-smoo
   animation: slide-in 180ms ease-out;
 }
 .card.you-killed { border-left-color: var(--good); }
+.card.lobby { border-left-color: var(--accent); }
 @keyframes slide-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
 
 .moment {
@@ -36,14 +37,11 @@ body { font: 13px/1.4 var(--font); color: var(--text-primary); -webkit-font-smoo
   color: var(--bad); display: flex; justify-content: space-between;
 }
 .you-killed .moment { color: var(--good); }
-.demo { color: var(--text-muted); letter-spacing: 0.04em; }
+.lobby .moment { color: var(--accent); }
 
 .name { font: 700 22px/1.2 var(--font-display); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rank { color: var(--text-secondary); margin-top: 2px; }
-.rank .tier { color: var(--text-primary); font-weight: 600; }
-.peak { color: var(--accent); font-weight: 600; font-size: 12px; }
-.rank .unknown { color: var(--text-muted); }
-.meta, .history { color: var(--text-muted); font-size: 12px; }
+.fight { color: var(--text-primary); font-weight: 600; margin-top: 2px; }
+.history { color: var(--text-muted); font-size: 12px; }
 .match { margin-top: 6px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
 .chip {
   font: 700 11px/1 var(--font-display); letter-spacing: 0.08em; text-transform: uppercase;
@@ -52,3 +50,6 @@ body { font: 13px/1.4 var(--font); color: var(--text-primary); -webkit-font-smoo
 .history { margin-top: 2px; }
 .knocked-by { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 12px; }
 .knocked-by .who { color: var(--text-secondary); font-weight: 600; }
+.lobby-player { margin-top: 6px; }
+.lobby-player .who { font: 700 17px/1.2 var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lobby-player .history { margin-top: 0; }

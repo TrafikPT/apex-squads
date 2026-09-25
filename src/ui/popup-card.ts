@@ -1,22 +1,20 @@
-/** What a kill/death popup shows (built by src/encounters.ts, drawn by src/ui/popup.ts). */
+/** What a popup shows (built by src/encounters.ts, drawn by src/ui/popup.ts). */
 
 export type Moment = 'killed_by' | 'you_killed';
 
 export interface PlayerCard {
   name: string;
-  /** Plays in anonymous mode ("Fuse2676"): can't be identified, so no rank or history. */
+  /** Plays in anonymous mode ("Fuse2676"): can't be identified, so no history. */
   anonymous: boolean;
   /** Their kills this match, up to this moment. */
   kills: number;
   /** Most kills in the lobby so far, with at least 3. */
   killLeader: boolean;
-  /** Current rank from the API; null without a key, or when the lookup failed. */
-  rank: { tier: string; div: number; score: number } | null;
-  /** Highest rank we've ever seen for them; only set when above the current one. */
-  peak: { tier: string; div: number; season: string | null } | null;
-  level: number | null;
-  topPercent: number | null;
-  /** Earlier matches only (this one excluded). */
+  /** When they killed or knocked me: the gun or ability they used, if the kill feed says. */
+  weapon: string | null;
+  /** When they killed or knocked me: my damage on them this match (armor included). */
+  damageFromMe: number | null;
+  /** Earlier matches only (this one and any later ones excluded). */
   metBefore: number;
   /** Their K/D over the earlier matches we shared, from the kill feed; null when never met. */
   kd: number | null;
@@ -24,12 +22,19 @@ export interface PlayerCard {
   iKilledThem: number;
 }
 
-export interface Popup {
+export interface EncounterPopup {
   moment: Moment;
   at: string;
   player: PlayerCard;
   /** When killed: whoever knocked me, if it wasn't the killer. */
   knockedBy?: PlayerCard;
-  /** Replay preview with made-up ranks. */
-  demo?: boolean;
 }
+
+/** At match start: opponents who killed me before, or have a high K/D against the lobbies we shared. */
+export interface LobbyPopup {
+  moment: 'lobby';
+  at: string;
+  players: PlayerCard[];
+}
+
+export type Popup = EncounterPopup | LobbyPopup;

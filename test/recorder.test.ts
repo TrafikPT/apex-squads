@@ -231,12 +231,6 @@ test('once the roster shows my EA ID, snapshots look me up by it instead of by n
   assert.deepEqual(rank.calls, ['Player1', 'uid:101']);
 });
 
-test('player lookups are recorded under the looked-up player ID', () => {
-  const { sink, recorder } = setup();
-  recorder.playerLookup('101', { status: 200 });
-  assert.deepEqual([sink.lines[0].kind, sink.lines[0].key], ['player_lookup', '101']);
-});
-
 test('API failures are recorded, not thrown', async () => {
   const { sink, rank, name, phase } = setup();
   rank.fail = true;

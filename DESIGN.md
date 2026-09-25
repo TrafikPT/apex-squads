@@ -1,7 +1,7 @@
 # Apex Tracker — Design
 
 Status: **draft v6**: recorder built; stats layer and dashboard running on 23 real matches imported from the Overwolf client's log (§9.1). Our recorder is still untested against the real game. Overwolf proposal submitted 2026-09-24; Plan B (OCR) designed in §11.
-Last updated: 2026-09-24
+Last updated: 2026-09-25
 
 A free, local-first companion app for Apex Legends (Windows PC, Overwolf) that records
 every ranked match and computes stats: kills, knocks, assists, damage, revives,
@@ -24,6 +24,9 @@ RP, broken down per match, per legend and per weapon.
     knocks per game when playing with me;
   - my placement, kills and damage when I play with one specific friend, or
     with a specific pair of friends (a full premade squad).
+- **The rest of the lobby** (decided 2026-09-25, replacing an earlier
+  non-goal): what we know about opponents, in popups: our own history with
+  them. Confirm with Overwolf before release (§10).
 - **Comps** (suggested by a friend): stats per 3-legend composition in full
   premades, to answer "is this comp working?"
 - **Filters that combine freely** on every view: time period (last 7/30
@@ -37,11 +40,6 @@ RP, broken down per match, per legend and per weapon.
 
 ### Non-goals (for now)
 - Console support. Overwolf is Windows PC only.
-- Information about the rest of the lobby: opponents' names, ranks or kills
-  (TRN's overlay shows this). This keeps us clear of game-policy questions
-  about competitive advantage. _Exception (decided 2026-09-24):_ one popup
-  about the player who just killed me or whom I just killed (§12). Confirm
-  with Overwolf before release.
 - Any UI in the PoC: SQL queries are the interface. The overlay and
   dashboard are phase 3.
 - Anything that reads game memory or network traffic. Easy Anti-Cheat bans
@@ -206,10 +204,6 @@ What each `kind` carries:
 - `rp_snapshot`: `key` = trigger (`lobby`, `match_start`, `post_match`,
   `account_change`); `value` = `{player_name, status, body}` (the full API
   response) or `{player_name, error}`.
-- `player_lookup`: an API lookup of another player for the kill/death popup
-  (§12). `key` = their EA ID; `value` = `{name, status, global}` (only the
-  response's `global` object: name, level, rank) or `{name, error}`. These
-  lines are the history the popup's "peak rank seen" comes from.
 - `lifecycle`: session start/end, package ready or failed, game detected or
   exited, features registered, GEP errors. This is the recorder's health log.
 
@@ -484,17 +478,20 @@ ranked trios. Provider log only: no `info_snapshot`, no
 - **Anonymous mode:** 164 of 3,520 kill feed names (4.7%) aren't in the
   roster. All are a legend's name plus four digits (`Fuse2676`,
   `Mad Maggie3990`): players in anonymous mode. They can't be identified or
-  looked up; the popup says so. The anonymizer keeps these names.
+  tracked; the popup says so. The anonymizer keeps these names.
 - **apexlegendsstatus (Q9):** lookup by name fails ("Player not found") even
   for me; lookup by `uid` works with the roster's `origin_id` (EA ID) and,
   for Steam players, `platform_id`. The EA ID returns more (e.g. the "top %").
   The response has current rank (tier, division, RP, split dates), level and
-  "top X%", but **no peak rank**: we keep our own (highest rank we've seen).
-  Tracker kills/K/D only count equipped trackers, so they aren't shown.
+  "top X%", but no rank history. Tracker kills/K/D only count equipped
+  trackers. **Not used for other players (2026-09-25):** ranked lobbies share
+  a target rank, so an opponent's rank is mine or lower (a premade teammate
+  or a smurf), and the "peak we've seen" is capped the same way. The popups
+  use our own kill-feed history instead; the API is only for my RP.
 - **Rank thresholds changed since Season 17:** the API calls 8,408 RP
   Gold I and 8,642 RP Platinum IV, but `src/ui/ranks.ts` starts Platinum at
-  8,200. The popup uses the API's rank names; the dashboard's table needs the
-  current values (to find: in game, or inferred from `player_lookup` lines).
+  8,200. The dashboard's table needs the current values (to find: in game,
+  or from my own `rp_snapshot` lines).
 
 Still open for our own recorder: 4–9, 11, and 1–3 re-checked on our data.
 
@@ -511,6 +508,8 @@ Still open for our own recorder: 4–9, 11, and 1–3 re-checked on our data.
   Submitted 2026-09-24. If it is declined: **Plan B, screen capture + OCR
   (§11)**. Respawn's Live API was ruled out: almost certainly custom lobbies
   only.
+- **Showing opponents' info** (§1, §12): TRN's overlay does it, but confirm
+  with Overwolf that it's allowed before release.
 - **Game updates** can break GEP features for days. Overwolf publishes
   feature status. `lifecycle` lines help spot silent features.
 - **apexlegendsstatus**: response shape not yet verified (§2.2). The key is
@@ -647,25 +646,40 @@ remove:
 - Only high-confidence stats. Medium-confidence ones (damage per weapon) are
   labelled as estimates.
 
-### Kill/death popup (built 2026-09-24, needs the overlay to show in game)
-A small card when **I'm killed** (the killer, plus whoever knocked me if that
-was someone else) and when **I kill** someone. Knocks don't show a card; they
-look the player up early so the card is ready. It shows:
-- their **current rank** (API), and the **peak rank we've seen** for them,
-  only when it's higher than the current one (from `player_lookup` lines);
-- level and "top X%" (API);
-- their kills **this match**, with **kill leader** from 3 kills;
-- history: matches shared before, their **K/D over those matches** (the kill
-  feed covers the whole lobby, so it firms up the more often we meet), and how
-  often they killed me or I killed them.
+### Popups (built 2026-09-24/25, need the overlay to show in game)
+Everything on them comes from our own recordings: no API, so they show the
+moment they fire and need no key. Opponents' ranks were dropped (§9.1): the
+kill-feed K/D over matches we shared says more about a player.
 
-Code: `src/encounters.ts` (when a popup fires, the card),
-`src/player-history.ts`, `src/popup-service.ts` (one lookup per player per
-session, recorded), `src/popup-window.ts` and `src/ui/popup.ts`.
-`npm run popup:preview` replays a recorded match with made-up ranks. The
-window is a plain always-on-top window for now, so it only shows over the
-game in borderless windowed mode; Overwolf's overlay replaces it once the
-app is approved. Without an API key the card shows no rank.
+**Kill/death card** when **I'm killed** (the killer, plus whoever knocked me
+if that was someone else) and when **I kill** someone. Knocks don't show a
+card. It shows:
+- their kills **this match**, with **kill leader** from 3 kills;
+- on the death card: **the weapon they used** (the kill feed's; a bleed-out
+  or finisher shows the knock weapon; abilities by name, e.g. "Rolling
+  Thunder") and **the damage I had dealt them** this match (in 11 of 27
+  recorded deaths it was 0: caught out, not a lost fight);
+- history: matches shared before, their **K/D over those matches** (the kill
+  feed covers the whole lobby while I'm alive, so it firms up the more often
+  we meet), and how often they killed me or I killed them.
+
+**Lobby card** at match start (2 s after `match_start`; the roster arrives
+within 0.1 s), only when there is something to say: players in the lobby who
+**killed me before**, then players with a **K/D ≥ 2 over 2+ earlier shared
+matches**, up to 4. Teammates never. Replaying the 23 recorded matches in
+order: 6 lobby cards, growing as history builds up.
+
+History counts **earlier matches only**, by the order matches were first
+seen, so a replay whose history already holds later matches shows what the
+card would have shown then.
+
+Code: `src/encounters.ts` (when a popup fires, the cards),
+`src/player-history.ts`, `src/popup-service.ts`, `src/popup-window.ts` and
+`src/ui/popup.ts`. `npm run popup:preview` replays a recorded match
+(`APEX_REPLAY_MATCH=<id>`; from VS Code's terminal prefix it with
+`env -u ELECTRON_RUN_AS_NODE`). The window is a plain always-on-top window
+for now, so it only shows over the game in borderless windowed mode;
+Overwolf's overlay replaces it once the app is approved.
 
 ### Planned
 | Where | Feature |
@@ -677,7 +691,10 @@ app is approved. Without an API key the card shows no rank.
 | Squads | Support stats: knocked squadmates revived vs lost, how often I get picked up, how many knocks become kills (mine or the squad's) |
 | Weapons | Personal tier list: kills per match with the gun and damage share, normalised for games played. Not win rate: guns held late in a match correlate with surviving |
 | Sharing | Recap PNG for a session or week. Friends' names shown, randoms masked |
-| Settings | Diagnostics: recent `lifecycle` errors, GEP feature status |
+| Overview | **Seasons**: my totals per past ranked season (games, kills, K/D, wins, final RP) from `player_stats_br_ranked_history`, so the dashboard has years of history on first launch. Local player only; each account's history arrives when it logs in |
+| Overview / Matches | **Contested landings**: enemy squads engaged in the first 3 min after `landed` (my damage targets plus squad kill-feed fights, by roster `team_id`). In the 23 recorded matches: 3+ squads in 7 (avg placement 13.9), 0–2 in 16 (avg 9.8). Lets hot drops be judged by what happened, not where we landed |
+| Matches | **Third parties** (try it, then decide): a death where I'd been damaging squad A and was knocked by squad B within a short window. A heuristic: check on real matches before showing it |
+| Settings | Diagnostics: recent `lifecycle` errors, GEP feature status. Maybe: ranked games not recorded, from the `games` count in `player_stats` (7 on 24 Sept) |
 | Settings | Obituaries check: warn when a match has no `kill_feed` lines |
 | Settings | Choose the recordings folder (e.g. a OneDrive folder, for backup and several PCs). `main.ts` already reads `APEX_TRACKER_DATA_DIR` |
 | Settings | CSV export of the gold facts |
@@ -697,6 +714,12 @@ app is approved. Without an API key the card shows no rank.
 | Idea | Why not |
 |---|---|
 | Tilt, time-of-day and day-of-week breakdowns; calendar heatmap | Not wanted; information overload |
+| Ultimate usage (time sitting on a full ult) | Holding the ult is often right when not fighting; the number can't tell good from bad |
+| Items carried at death | Items come as `unknown_NNN` ids that need mapping by hand; little value |
+| "Knocks I set up" (my damage before a teammate's knock) | That's what the game's assist already counts; the damage amount can't tell my share without the target's health and armor |
+| Lobby strength (median rank of the lobby) | Ranked lobbies share a target rank, so it's always about mine; lower ranks are premade teammates or smurfs |
+| Enemy squad card on first contact (their ranks) | Same reason: their ranks are mine or misleadingly lower |
+| After-match card | The game's own summary screen already shows it |
 | Comp win-rate matrix, "squad chemistry" score, teammate card in the overlay | Samples too small (hundreds of trios; randoms met once) |
 | RP breakdown (entry cost / placement / kills) | The API's RP delta already tells the story; the formula changes every season |
 | Placement histogram | Avg placement and Top 5 % already cover it |

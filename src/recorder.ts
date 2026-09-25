@@ -14,7 +14,6 @@ export type RecordKind =
   | 'info' // GEP new-info-update
   | 'info_snapshot' // result of gep.getInfo()
   | 'rp_snapshot' // apexlegendsstatus API response
-  | 'player_lookup' // apexlegendsstatus lookup of another player (kill/death popups)
   | 'lifecycle'; // app/game/GEP status (startup, game detected, errors...)
 
 export interface RecordLine {
@@ -120,11 +119,6 @@ export class Recorder {
 
   lifecycle(key: string, value: unknown = null): void {
     this.write('lifecycle', { feature: null, key, value });
-  }
-
-  /** An API lookup of another player; `key` is their EA ID so history can find every lookup of them. */
-  playerLookup(uid: string, value: unknown): void {
-    this.write('player_lookup', { feature: null, key: uid, value });
   }
 
   /** Cancel pending RP snapshots (call on shutdown). */

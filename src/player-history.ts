@@ -1,21 +1,11 @@
 /**
  * What we know about other players, from every recording: lobbies shared
- * with me, fights with me, their kills and deaths in the kill feed, and every
- * rank an API lookup returned. The peak rank is the highest one *we* have
- * seen for them, so it grows over the years.
+ * with me, fights with me, and their kills and deaths in the kill feed. It
+ * grows with every match, so it says more about a player than their rank
+ * (ranked lobbies share one target rank).
  */
 import { baseName } from './game-names';
 import type { RecordLine } from './recorder';
-
-export interface RankSeen {
-  /** As the API names it: "Gold", "Apex Predator"... */
-  tier: string;
-  /** 4 (lowest) to 1; 0 for Master and Predator. */
-  div: number;
-  score: number;
-  season: string | null;
-  at: string;
-}
 
 export type EncounterKind = 'killed_me' | 'knocked_me' | 'i_killed' | 'i_knocked';
 
@@ -26,49 +16,34 @@ export interface PlayerRecord {
   encounters: { matchId: string; kind: EncounterKind }[];
   /** Per match: their kills and deaths in the kill feed (it covers the whole lobby). */
   fights: Map<string, { kills: number; deaths: number }>;
-  latest: RankSeen | null;
-  peak: RankSeen | null;
-  level: number | null;
-  /** "Top X%" of players apexlegendsstatus tracks; null when unknown. */
-  topPercent: number | null;
-}
-
-/** Value of a `player_lookup` line (src/popup-service.ts writes it). */
-export interface LookupValue {
-  name: string;
-  status?: number;
-  /** `global` from the API response: name, uid, level, rank... */
-  global?: unknown;
-  error?: string;
-}
-
-const TIERS = ['Rookie', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Master', 'Apex Predator'];
-
-/** Orders ranks: tier first, then division (IV lowest). Unknown tiers sort lowest. */
-export function rankValue(r: { tier: string; div: number }): number {
-  return TIERS.indexOf(r.tier) * 10 + (r.div ? 5 - r.div : 5);
 }
 
 export class PlayerHistory {
   private players = new Map<string, PlayerRecord>();
   /** Per match: base name -> EA ID, from the roster (the kill feed only has names). */
   private rosters = new Map<string, Map<string, string>>();
+  /** Per match: EA IDs of my teammates. */
+  private teammates = new Map<string, Set<string>>();
+  /** Matches in the order they were first seen. */
+  private order = new Map<string, number>();
 
   /** Feed recorder lines in order (per session); anything irrelevant is ignored. */
   add(l: RecordLine): void {
-    if (l.kind === 'player_lookup') {
-      this.addLookup(l);
-      return;
-    }
     if (!l.match_id || !l.key) return;
+    if (!this.order.has(l.match_id)) this.order.set(l.match_id, this.order.size);
     if (l.key.startsWith('roster_')) {
-      const p = decode(l.value) as { name?: string; is_local?: unknown; origin_id?: string; platform_id?: string } | null;
+      const p = decode(l.value) as { name?: string; is_local?: unknown; isTeammate?: unknown; origin_id?: string; platform_id?: string } | null;
       if (!p?.name || p.is_local === '1' || p.is_local === true) return;
       const uid = p.origin_id || p.platform_id;
       if (!uid) return;
       let roster = this.rosters.get(l.match_id);
       if (!roster) this.rosters.set(l.match_id, (roster = new Map()));
       roster.set(baseName(p.name), uid);
+      if (p.isTeammate === true || p.isTeammate === 'true') {
+        let mates = this.teammates.get(l.match_id);
+        if (!mates) this.teammates.set(l.match_id, (mates = new Set()));
+        mates.add(uid);
+      }
       const rec = this.ensure(uid);
       rec.name = baseName(p.name);
       rec.lobbies.add(l.match_id);
@@ -93,6 +68,19 @@ export class PlayerHistory {
     return this.rosters.get(matchId)?.get(baseName(name)) ?? null;
   }
 
+  /** Whether match `a` came before match `b` (unknown matches come before none). */
+  isEarlier(a: string, b: string): boolean {
+    const x = this.order.get(a);
+    const y = this.order.get(b);
+    return x !== undefined && y !== undefined && x < y;
+  }
+
+  /** EA IDs of everyone in a match's lobby except me and my teammates. */
+  opponents(matchId: string): string[] {
+    const mates = this.teammates.get(matchId);
+    return [...new Set(this.rosters.get(matchId)?.values())].filter((uid) => !mates?.has(uid));
+  }
+
   get(uid: string): PlayerRecord | undefined {
     return this.players.get(uid);
   }
@@ -112,36 +100,10 @@ export class PlayerHistory {
     return f;
   }
 
-  private addLookup(l: RecordLine): void {
-    const v = l.value as LookupValue | null;
-    const g = v?.global as { level?: number; rank?: Record<string, unknown> } | undefined;
-    if (!l.key || !g?.rank) return;
-    const rec = this.ensure(l.key);
-    if (v?.name) rec.name = v.name;
-    const r = g.rank;
-    const seen: RankSeen = {
-      tier: String(r.rankName ?? ''),
-      div: Number(r.rankDiv) || 0,
-      score: Number(r.rankScore) || 0,
-      season: typeof r.rankedSeason === 'string' ? r.rankedSeason : null,
-      at: l.received_at,
-    };
-    if (!rec.latest || seen.at >= rec.latest.at) {
-      rec.latest = seen;
-      if (typeof g.level === 'number') rec.level = g.level;
-      // 100 is what the API returns when it has no ranking for the player.
-      const top = Number(r.ALStopPercent);
-      rec.topPercent = top > 0 && top < 100 ? top : null;
-    }
-    if (!rec.peak || rankValue(seen) > rankValue(rec.peak) || (rankValue(seen) === rankValue(rec.peak) && seen.score > rec.peak.score)) {
-      rec.peak = seen;
-    }
-  }
-
   private ensure(uid: string): PlayerRecord {
     let rec = this.players.get(uid);
     if (!rec) {
-      rec = { uid, name: '', lobbies: new Set(), encounters: [], fights: new Map(), latest: null, peak: null, level: null, topPercent: null };
+      rec = { uid, name: '', lobbies: new Set(), encounters: [], fights: new Map() };
       this.players.set(uid, rec);
     }
     return rec;

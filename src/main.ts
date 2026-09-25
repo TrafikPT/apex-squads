@@ -29,14 +29,14 @@ const dataDir =
   process.env.APEX_TRACKER_DATA_DIR || path.join(app.getPath('documents'), 'ApexTracker');
 const recordingsDir = path.join(dataDir, 'recordings');
 
-// Everything met in earlier sessions, for the popups' "met before" and peak rank.
+// Everything met in earlier sessions, for the popups' history (met before, K/D).
 const history = new PlayerHistory();
 for (const line of readRecordings([recordingsDir])) history.add(line);
 
 const sink = new JsonlSink(recordingsDir, `${sessionId}.jsonl`);
 const apiKey = process.env.APEX_STATUS_API_KEY;
 const rankClient = apiKey ? new ApexStatusClient(apiKey) : null;
-// Every recorded line also goes to the popups (kill/death cards).
+// Every recorded line also goes to the popups (kill/death and lobby cards).
 let popups: PopupService | null = null;
 const tee: Sink = {
   write: (line) => {
@@ -48,8 +48,6 @@ const recorder = new Recorder(sessionId, tee, rankClient);
 const popupWindow = new PopupWindow();
 popups = new PopupService({
   history,
-  lookup: rankClient,
-  recordLookup: (uid, value) => recorder.playerLookup(uid, value),
   show: (popup) => {
     if (app.isReady()) popupWindow.show(popup);
   },
