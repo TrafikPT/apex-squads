@@ -19,7 +19,7 @@ function match(id: string, startedAt: Date, patch: Partial<MatchFact> = {}): Mat
 
 function dataset(matches: MatchFact[], mates: [string, string, number?, string?][] = []): Dataset {
   return {
-    accounts: [], players: [], matches, weapons: [], seasonStart: '2026-08-01',
+    accounts: [], players: [], matches, weapons: [], seasons: [], seasonStart: '2026-08-01',
     teammates: mates.map(([matchId, playerKey, kills = 1, legend = 'Wraith']) => ({ matchId, playerKey, legend, kills, knocks: kills, deaths: 1 })),
   };
 }
@@ -313,13 +313,17 @@ test('rankedAccount: only when every ranked match is on one account', () => {
   assert.equal(rankedAccount([]), null);
 });
 
-test('ranks: thresholds, division names and floors', () => {
+test('ranks: Season 30 thresholds, uneven divisions, names and floors', () => {
   assert.deepEqual(rankOf(0), { tier: 'Rookie', division: 4, floor: 0, next: 250 });
-  assert.deepEqual(rankOf(5_399), { tier: 'Silver', division: 1, floor: 4_800, next: 5_400 });
-  assert.deepEqual(rankOf(5_400), { tier: 'Gold', division: 4, floor: 5_400, next: 6_100 });
-  assert.deepEqual(rankOf(11_399), { tier: 'Platinum', division: 1, floor: 10_600, next: 11_400 });
-  assert.deepEqual(rankOf(20_000), { tier: 'Master', division: null, floor: 15_000, next: null });
+  assert.deepEqual(rankOf(5_499), { tier: 'Silver', division: 1, floor: 4_500, next: 5_500 });
+  assert.deepEqual(rankOf(5_500), { tier: 'Gold', division: 4, floor: 5_500, next: 6_250 });
+  assert.deepEqual(rankOf(10_999), { tier: 'Platinum', division: 2, floor: 10_000, next: 11_000 });
+  assert.deepEqual(rankOf(11_000), { tier: 'Platinum', division: 1, floor: 11_000, next: 12_000 });
+  assert.deepEqual(rankOf(20_000), { tier: 'Master', division: null, floor: 16_000, next: null });
+  // What the apexlegendsstatus API called these RP values.
+  assert.equal(rankName(rankOf(8_408).tier, rankOf(8_408).division), 'Gold I');
+  assert.equal(rankName(rankOf(8_642).tier, rankOf(8_642).division), 'Platinum IV');
   assert.equal(rankName('Gold', 2), 'Gold II');
   assert.equal(rankName('Master', null), 'Master');
-  assert.deepEqual(divisionFloors(5_000, 8_200), [5_400, 6_100, 6_800, 7_500, 8_200]);
+  assert.deepEqual(divisionFloors(5_000, 8_500), [5_500, 6_250, 7_000, 7_750, 8_500]);
 });

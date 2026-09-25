@@ -1,7 +1,7 @@
 import type { Dataset, MatchFact } from '../facts';
 import type { Filters } from '../stats';
 
-export type View = 'overview' | 'squads' | 'weapons' | 'legends' | 'matches' | 'settings';
+export type View = 'overview' | 'squads' | 'weapons' | 'legends' | 'matches' | 'seasons' | 'settings';
 
 /** Everything a view needs to render; views never touch app state directly. */
 export interface ViewContext {

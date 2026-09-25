@@ -18,6 +18,8 @@ export interface PlayerCard {
   metBefore: number;
   /** Their K/D over the earlier matches we shared, from the kill feed; null when never met. */
   kd: number | null;
+  /** Their kills in those earlier matches (the K/D's sample). */
+  killsSeen: number;
   theyKilledMe: number;
   iKilledThem: number;
 }

@@ -19,6 +19,7 @@ import type { View, ViewContext, ViewResult } from './views/context';
 import { legendsView } from './views/legends';
 import { matchesView, openMatch } from './views/matches';
 import { overviewView } from './views/overview';
+import { seasonsView } from './views/seasons';
 import { squadsView } from './views/squads';
 import { weaponsView } from './views/weapons';
 
@@ -37,6 +38,7 @@ const NAV: [View, string, string][] = [
   ['weapons', 'Weapons', 'M12 3v4M12 17v4M3 12h4M17 12h4M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'],
   ['legends', 'Legends', 'M12 3l7 3v5c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6z'],
   ['matches', 'Matches', 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01'],
+  ['seasons', 'Seasons', 'M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8'],
 ];
 const SETTINGS_ICON = 'M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4';
 
@@ -50,7 +52,7 @@ let teammateChips: { playerKey: string; games: number }[];
 
 let filters: Filters = { ...DEFAULT_FILTERS };
 const params = new URLSearchParams(location.search);
-const VIEWS: View[] = ['overview', 'squads', 'weapons', 'legends', 'matches', 'settings'];
+const VIEWS: View[] = ['overview', 'squads', 'weapons', 'legends', 'matches', 'seasons', 'settings'];
 let view: View = VIEWS.find((v) => v === params.get('view')) ?? 'overview';
 
 /** Stats from the recordings via the app (src/preload.ts); sample data when there are none, or with ?data=sample. */
@@ -163,6 +165,7 @@ function renderView(ctx: ViewContext): ViewResult {
   if (view === 'matches') return matchesView(ctx);
   if (view === 'legends') return legendsView(ctx);
   if (view === 'weapons') return weaponsView(ctx);
+  if (view === 'seasons') return seasonsView(ctx);
   const label = view[0].toUpperCase() + view.slice(1);
   return { node: el('div', { class: 'view' }, el('section', { class: 'card' }, el('h2', { class: 'card-title' }, label),
     el('div', { class: 'empty' }, 'Coming soon'))) };

@@ -38,7 +38,7 @@ function renderLobby(p: LobbyPopup): HTMLElement {
 function playerLines(c: PlayerCard): HTMLElement[] {
   const lines: HTMLElement[] = [el('div', { class: 'name' }, c.name)];
 
-  const fight = [c.weapon ? `with ${c.weapon}` : '', c.damageFromMe !== null ? `you hit them for ${c.damageFromMe}` : ''].filter(Boolean);
+  const fight = [usedText(c.weapon), c.damageFromMe !== null ? `you hit them for ${c.damageFromMe}` : ''].filter(Boolean);
   if (fight.length) lines.push(el('div', { class: 'fight' }, fight.join(' · ')));
 
   const match = el('div', { class: 'match' }, `${c.kills} ${c.kills === 1 ? 'kill' : 'kills'} this match`);
@@ -50,6 +50,12 @@ function playerLines(c: PlayerCard): HTMLElement[] {
   return lines;
 }
 
+/** "with Flatline"; a knocked player who died in the ring is credited to the knocker, "in the ring". */
+function usedText(weapon: string | null): string {
+  if (!weapon) return '';
+  return weapon === 'The Ring' ? 'in the ring' : `with ${weapon}`;
+}
+
 function historyParts(c: PlayerCard): string[] {
   const parts = [`met ${c.metBefore}× before`];
   if (c.kd !== null) parts.push(`K/D ${c.kd.toFixed(2)}`);
@@ -59,7 +65,7 @@ function historyParts(c: PlayerCard): string[] {
 }
 
 function knockedBy(c: PlayerCard): HTMLElement {
-  const bits = [c.weapon ? `with ${c.weapon}` : '', c.damageFromMe !== null ? `you hit them for ${c.damageFromMe}` : ''].filter(Boolean);
+  const bits = [usedText(c.weapon), c.damageFromMe !== null ? `you hit them for ${c.damageFromMe}` : ''].filter(Boolean);
   return el('div', { class: 'knocked-by' },
     el('span', { class: 'label' }, 'Knocked by '), el('span', { class: 'who' }, c.name),
     bits.length ? ` · ${bits.join(' · ')}` : '');

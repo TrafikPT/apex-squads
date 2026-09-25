@@ -98,6 +98,7 @@ button, select, input { font-family: inherit; }
 .view-matches { grid-template-rows: minmax(0, 1fr); align-content: stretch; }
 .view-legends { grid-template-rows: auto minmax(0, 1fr); align-content: stretch; }
 .view-weapons { grid-template-rows: auto auto minmax(0, 1fr); align-content: stretch; }
+.view-seasons { grid-template-rows: auto minmax(200px, 1fr) auto; align-content: stretch; }
 
 .filters {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
@@ -167,6 +168,10 @@ select, input[type="date"] {
 .chart .area { fill: var(--series-1); opacity: 0.10; }
 .chart .crosshair { stroke: var(--text-muted); stroke-width: 1; }
 .chart .dot { fill: var(--series-1); stroke: var(--surface); stroke-width: 2; }
+/* A value that's still moving (the season being played): hollow dot, dashed line into it. */
+.chart .dot.now { fill: var(--surface); stroke: var(--series-1); }
+.chart .line.in-progress { stroke-dasharray: 4 4; }
+.chart .point-label { fill: var(--text-secondary); font: 600 11px var(--font); font-variant-numeric: tabular-nums; }
 .tooltip {
   position: absolute; pointer-events: none; min-width: 160px;
   background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px;
@@ -192,6 +197,19 @@ tbody tr:hover td { background: rgba(255, 255, 255, 0.025); }
 tr:last-child td { border-bottom: 0; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 td .muted { color: var(--text-muted); }
+td .best { color: var(--text-primary); font-weight: 700; }
+/* Rank badges (rank-badge.ts): in a table cell, in a tooltip line. */
+.rank-badge { display: block; width: 32px; height: 32px; }
+td.rank-cell { padding-top: 2px; padding-bottom: 2px; }
+td.rank-cell .muted { margin-left: 4px; vertical-align: middle; }
+.rank-label { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
+.rank-label .division { font: 700 14px/1 var(--font-display); letter-spacing: 0.04em; min-width: 22px; }
+.tooltip .t-rank { display: flex; align-items: center; gap: 6px; }
+.tooltip .t-rank .rank-badge { width: 22px; height: 22px; }
+.now-tag {
+  margin-left: 6px; font: 600 10px/1 var(--font-display); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--accent); vertical-align: 1px;
+}
 .legend-col { width: 1%; }
 .legend-badge {
   width: 34px; height: 34px; flex: none; display: grid; place-items: center; overflow: hidden;
@@ -272,6 +290,7 @@ tbody .day-row:first-child td { padding-top: 6px; }
 /* ---------------------------------------------------------- legends */
 .insight.with-portrait { flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px; }
 .insight.with-portrait .legend-badge { width: 52px; height: 52px; flex: none; }
+.insight.with-portrait .rank-badge { width: 56px; height: 56px; flex: none; }
 .insight-text { min-width: 0; }
 .legends-table .legend-badge { width: 38px; height: 38px; }
 .legend-name { font: 700 15px/1 var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; }

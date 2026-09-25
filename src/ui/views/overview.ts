@@ -2,10 +2,11 @@ import { el, svgEl, svgText } from '../dom';
 import type { MatchFact } from '../facts';
 import { dayTime, fixed, fmtDateTime, fmtDay, fmtInt, niceTicks, pct, signed, xTickIndices } from '../format';
 import { legendBadge } from '../portraits';
-import { divisionFloors, rankName, rankOf, TIERS } from '../ranks';
+import { rankName, rankOf } from '../ranks';
 import { kpis, rankedAccount, rankGames, rpByDay } from '../stats';
 import type { ViewContext, ViewResult } from './context';
 import { openMatch } from './matches';
+import { drawRankAxis, rankTicks } from './rank-axis';
 import { clickable, MIN_SAMPLE, rpText } from './shared';
 
 /**
@@ -120,15 +121,7 @@ function drawRpChart(host: HTMLElement, points: ChartPoint[], ranked: boolean): 
   const t1 = times[times.length - 1];
   const x = (t: number) => m.left + (t1 === t0 ? w / 2 : ((t - t0) / (t1 - t0)) * w);
   const values = points.map((p) => p.value);
-  let ticks: number[];
-  if (ranked) {
-    // From the floor of the lowest division reached to the start of the next one above the highest.
-    const top = rankOf(Math.max(...values));
-    ticks = divisionFloors(rankOf(Math.min(...values)).floor, top.next ?? Math.max(...values) + 500);
-    if (top.next === null) ticks.push(Math.max(...values) + 500);
-  } else {
-    ticks = niceTicks(Math.min(0, ...values), Math.max(0, ...values), 4);
-  }
+  const ticks = ranked ? rankTicks(values) : niceTicks(Math.min(0, ...values), Math.max(0, ...values), 4);
   const yMin = ticks[0];
   const yMax = ticks[ticks.length - 1];
   const y = (v: number) => m.top + h - ((v - yMin) / (yMax - yMin || 1)) * h;
@@ -137,32 +130,7 @@ function drawRpChart(host: HTMLElement, points: ChartPoint[], ranked: boolean): 
     'aria-label': ranked ? `RP level by play day against the rank thresholds, ${points.length} play days`
       : `Net RP running total, ${points.length} play days` });
   if (ranked) {
-    // Every other tier gets a faint band, so tiers read as blocks without colour.
-    TIERS.forEach((t, i) => {
-      const lo = Math.max(t.floor, yMin);
-      const hi = Math.min(TIERS[i + 1]?.floor ?? Infinity, yMax);
-      if (i % 2 && hi > lo) svg.append(svgEl('rect', { class: 'band', x: m.left, width: w, y: y(hi), height: y(lo) - y(hi) }));
-    });
-    const tierFloors = new Set<number>(TIERS.map((t) => t.floor));
-    for (const t of ticks) {
-      svg.append(svgEl('line', { class: tierFloors.has(t) ? 'tier-line' : 'gridline', x1: m.left, x2: width - m.right, y1: y(t), y2: y(t) }));
-    }
-    // Each label sits mid-band, so the band a point falls in is its rank. When
-    // divisions get too thin to label, name the tiers instead.
-    const label = (text: string, lo: number, hi: number) =>
-      svg.append(svgText(text, { class: 'tick', x: m.left - 8, y: (y(lo) + y(hi)) / 2 + 4, 'text-anchor': 'end' }));
-    if (ticks.length <= 9 && y(ticks[0]) - y(ticks[1]) >= 16) {
-      for (let i = 0; i + 1 < ticks.length; i++) {
-        const r = rankOf(ticks[i]);
-        label(rankName(r.tier, r.division), ticks[i], ticks[i + 1]);
-      }
-    } else {
-      TIERS.forEach((t, i) => {
-        const lo = Math.max(t.floor, yMin);
-        const hi = Math.min(TIERS[i + 1]?.floor ?? Infinity, yMax);
-        if (y(lo) - y(hi) >= 16) label(t.tier, lo, hi);
-      });
-    }
+    drawRankAxis(svg, ticks, y, m.left, width - m.right);
   } else {
     for (const t of ticks) {
       svg.append(

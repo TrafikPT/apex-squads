@@ -306,7 +306,7 @@ WHERE is_ranked AND date >= date_trunc('month', current_date);
 
 | Stat | Source | Rule | Confidence |
 |---|---|---|---|
-| Kills / knocks / assists | Events + final `tabs` | Pick whichever matches the in-game summary (spike Q2) | High |
+| Kills / knocks / assists | Events + final `tabs`; knocks from the kill feed | Kills and assists: the events. Knocks: every knock, plus every kill of a player I didn't knock (the game's definition, §9.1); GEP's knockdown events without a kill feed | High (equal to the game's season stats) |
 | Damage | `damage` events | Sum of `damageAmount`, armor included | High (different definition from the game) |
 | Headshot % | `damage.headshot` | Headshot hits / all hits | High |
 | Legend | `legendSelect_X` where the local flag is true | — | High |
@@ -467,9 +467,10 @@ ranked trios. Provider log only: no `info_snapshot`, no
 - Kill feed kills per weapon add up to the `kill` events once bleed-outs and
   finishers (no weapon) go to the gun that knocked that player. Abilities
   appear as `action` with an empty weapon.
-- Legend codenames: `#character_Artemis_NAME` (all 23 of my picks) is shown
-  as **Sparrow** and `overdrive` as **Axle**: both **guesses**
-  (`src/game-names.ts`), to confirm in game.
+- Legend codenames: `#character_Artemis_NAME` (all 43 of my picks) is
+  **Sparrow**, confirmed (I only play Sparrow). `overdrive` as **Axle** is
+  inferred: the only unmatched codename, and Axle has been in my squads
+  (`src/game-names.ts`).
 - GEP gives the season number but not its dates. The "Season" filter uses
   the split start from an API RP snapshot (`rankedSeasonMeta.start`), else
   the first recorded match of the latest season.
@@ -488,10 +489,19 @@ ranked trios. Provider log only: no `info_snapshot`, no
   a target rank, so an opponent's rank is mine or lower (a premade teammate
   or a smurf), and the "peak we've seen" is capped the same way. The popups
   use our own kill-feed history instead; the API is only for my RP.
-- **Rank thresholds changed since Season 17:** the API calls 8,408 RP
-  Gold I and 8,642 RP Platinum IV, but `src/ui/ranks.ts` starts Platinum at
-  8,200. The dashboard's table needs the current values (to find: in game,
-  or from my own `rp_snapshot` lines).
+- **Rank thresholds (fixed 2026-09-25):** `src/ui/ranks.ts` had an older
+  table (Platinum from 8,200). Season 30's: Gold 5,500, Platinum 8,500 /
+  9,250 / 10,000 / 11,000 (divisions aren't equal), Diamond 12,000, Master
+  16,000. Our data agrees: the API calls 8,408 Gold I and 8,642 Platinum IV,
+  and my RP stopped falling at exactly 8,500 for three matches (the Platinum
+  IV floor; the RP formula doesn't know about that floor yet).
+- **Checked against the game's season stats** (the change across each of 43
+  matches): kills, deaths and assists equal ours in every match. Knocks: the
+  game counts every kill of a player the killer didn't knock (someone else's
+  knock, or the last of a squad) as a knockdown too; counted that way, 42 of
+  43 matches equal (84 of 85). Damage: ours is 2.7% higher (831 over 43
+  matches), not from damage to knocked players (the game counts that);
+  probably overkill, which the data can't correct.
 
 Still open for our own recorder: 4–9, 11, and 1–3 re-checked on our data.
 
@@ -537,6 +547,14 @@ Still open for our own recorder: 4–9, 11, and 1–3 re-checked on our data.
   screenshot of that message with the project in case EA or a store reviewer
   asks. `scripts/fetch-legend-portraits.mjs` fetches them, falling back to the
   EA-website art for legends the wiki doesn't have yet.
+  **Rank badges (2026-09-25):** the game's ranked badges, one per division
+  (`ui/assets/ranks/`, 26 images), downloaded by
+  `scripts/fetch-rank-badges.mjs` from apexlegendsstatus.com, which hosts
+  them for its API's `rankImg`. Bundled, never loaded from their server.
+  Same kind of game art as the portraits, but Overwolf's OK covered the
+  portraits only: **ask about the badges too** before a public release.
+  At table and axis size the badge's own numeral is unreadable, so the
+  division is also written next to it.
   **Open point:** the policy also says not to incorporate EA trademarks into
   our own branding. "Apex" in "Apex Squads" may be close to that line, so
   reconsider the name before a public release.
@@ -667,8 +685,9 @@ card. It shows:
 **Lobby card** at match start (2 s after `match_start`; the roster arrives
 within 0.1 s), only when there is something to say: players in the lobby who
 **killed me before**, then players with a **K/D ≥ 2 over 2+ earlier shared
-matches**, up to 4. Teammates never. Replaying the 23 recorded matches in
-order: 6 lobby cards, growing as history builds up.
+matches and 4+ kills seen**, up to 4. Teammates never. Replaying the 43
+recorded matches in order: 10 lobby cards (15 without the kill minimum,
+mostly "2 kills, 1 death").
 
 History counts **earlier matches only**, by the order matches were first
 seen, so a replay whose history already holds later matches shows what the
@@ -692,7 +711,7 @@ Overwolf's overlay replaces it once the app is approved.
 | Squads | Support stats: knocked squadmates revived vs lost, how often I get picked up, how many knocks become kills (mine or the squad's) |
 | Weapons | Personal tier list: kills per match with the gun and damage share, normalised for games played. Not win rate: guns held late in a match correlate with surviving |
 | Sharing | Recap PNG for a session or week. Friends' names shown, randoms masked |
-| Overview | **Seasons**: my totals per past ranked season (games, kills, K/D, wins, final RP) from `player_stats_br_ranked_history`, so the dashboard has years of history on first launch. Local player only; each account's history arrives when it logs in |
+| Seasons | ~~Season history~~ **done (2026-09-25)**, its own tab: my ranked seasons as the game counts them (`player_stats_br_ranked_latest` / `_history`; every game, recorded or not), one account at a time (All accounts shows the most-played one). Best season by RP, this season with the peak from our own snapshots, best K/D and damage; RP by season on the rank bands; one row per season with the best value per column in bold. `rank_score` is probably the end RP (no peak for past seasons), and older ranks are approximate (the thresholds changed), so they show as "≈". Lobby stats lines go to the account of the next match in their session. History keeps growing: GEP only sends the last 5 seasons, but old recordings keep theirs |
 | Overview / Matches | **Contested landings**: enemy squads engaged in the first 3 min after `landed` (my damage targets plus squad kill-feed fights, by roster `team_id`). In the 23 recorded matches: 3+ squads in 7 (avg placement 13.9), 0–2 in 16 (avg 9.8). Lets hot drops be judged by what happened, not where we landed |
 | Matches | **Third parties** (try it, then decide): a death where I'd been damaging squad A and was knocked by squad B within a short window. A heuristic: check on real matches before showing it |
 | Settings | Diagnostics: recent `lifecycle` errors, GEP feature status. Maybe: ranked games not recorded, from the `games` count in `player_stats` (7 on 24 Sept) |

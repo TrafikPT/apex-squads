@@ -7,7 +7,7 @@
  */
 import { baseName, legendName, mapName, weaponName, weaponOrOther } from './game-names';
 import type { RecordLine } from './recorder';
-import type { Account, Dataset, MatchFact, Mode, Player, TeammateFact, WeaponFact } from './ui/facts';
+import type { Account, Dataset, MatchFact, Mode, Player, SeasonFact, TeammateFact, WeaponFact } from './ui/facts';
 import { rankOf } from './ui/ranks';
 import { estimateRp } from './ui/rp-formula';
 
@@ -54,6 +54,7 @@ interface StatsSnapshot {
 }
 
 const RANKED_STATS = 'player_stats_br_ranked_latest';
+const RANKED_HISTORY = 'player_stats_br_ranked_history';
 const UNRANKED_STATS = 'player_stats_br_unranked_latest';
 
 export function buildDataset(lines: RecordLine[]): BuildResult {
@@ -70,6 +71,8 @@ export function buildDataset(lines: RecordLine[]): BuildResult {
   let incomplete = 0;
 
   const rpBefore = new Map<string, number>();
+  /** Per session, when each match started and whose it was: lobby lines get the account from these. */
+  const sessionMatches = new Map<string, { at: string; accountKey: string }[]>();
 
   for (const m of splitMatches(lines)) {
     const built = buildMatch(m, snapshots);
@@ -83,6 +86,9 @@ export function buildDataset(lines: RecordLine[]): BuildResult {
     weapons.push(...built.weapons);
     for (const t of built.roster) players.set(t.key, t.name);
     if (built.season !== null) seasons.set(built.match.matchId, built.season);
+    const session = m.own[0].session_id;
+    if (!sessionMatches.has(session)) sessionMatches.set(session, []);
+    sessionMatches.get(session)!.push({ at: built.match.startedAt, accountKey: built.match.accountKey });
 
     const acc = accounts.get(built.match.accountKey);
     if (!acc || built.match.startedAt > acc.lastAt) {
@@ -110,6 +116,7 @@ export function buildDataset(lines: RecordLine[]): BuildResult {
       matches,
       teammates,
       weapons,
+      seasons: seasonFacts(lines, sessionMatches),
       seasonStart: apiSeasonStart(lines) ?? seasonStart(matches, seasons),
     },
     incomplete,
@@ -213,19 +220,34 @@ function buildMatch(m: MatchLines, snapshots: Record<Mode, StatsSnapshot[]>) {
     }
   }
 
-  // Kills and knocks per weapon, from the kill feed. A bleed-out or finisher
-  // has no weapon: it goes to the gun that knocked that player.
+  // Knocks as the game's season stats count them: every knock, plus every kill
+  // of a player the killer didn't knock (someone else's knock, or the last of
+  // a squad, eliminated without one). On 43 real matches: 84 of the game's 85.
+  // Per weapon too; a bleed-out or finisher has no weapon, so its kill goes to
+  // the gun that knocked that player.
   const myFeedName = feed.length ? baseName(feed[0].local_player_name) : baseName(meName);
-  const knockedWith = new Map<string, string>();
+  const knockedBy = new Map<string, { attacker: string; weapon: string }>();
+  const downs = new Map<string, number>();
+  const down = (who: string) => downs.set(who, (downs.get(who) ?? 0) + 1);
   for (const k of feed) {
-    if (baseName(k.attackerName) !== myFeedName) continue;
+    const attacker = baseName(k.attackerName);
     const victim = baseName(k.victimName);
+    const mine = attacker === myFeedName;
     if (isKnock(k)) {
       const w = weaponOrOther(k.weaponName);
-      knockedWith.set(victim, w);
-      weaponRow(w).knocks++;
-    } else {
-      weaponRow(k.weaponName ? weaponOrOther(k.weaponName) : (knockedWith.get(victim) ?? weaponOrOther(null))).kills++;
+      knockedBy.set(victim, { attacker, weapon: w });
+      if (attacker) down(attacker);
+      if (mine) weaponRow(w).knocks++;
+      continue;
+    }
+    const knock = knockedBy.get(victim);
+    knockedBy.delete(victim);
+    const ownKnock = knock?.attacker === attacker;
+    if (attacker && !ownKnock) down(attacker);
+    if (mine) {
+      const w = k.weaponName ? weaponOrOther(k.weaponName) : ownKnock ? knock!.weapon : weaponOrOther(null);
+      weaponRow(w).kills++;
+      if (!ownKnock) weaponRow(w).knocks++;
     }
   }
 
@@ -237,7 +259,7 @@ function buildMatch(m: MatchLines, snapshots: Record<Mode, StatsSnapshot[]>) {
       playerKey: t.key,
       legend: picks.get(name) ?? 'Unknown',
       kills: theirs.filter((k) => !isKnock(k)).length,
-      knocks: theirs.filter(isKnock).length,
+      knocks: downs.get(name) ?? 0,
       deaths: feed.filter((k) => baseName(k.victimName) === name && !isKnock(k)).length,
     };
   });
@@ -254,7 +276,8 @@ function buildMatch(m: MatchLines, snapshots: Record<Mode, StatsSnapshot[]>) {
     teams: Number(summary.teams) || 0,
     kills: runningTotal('kill'),
     assists: runningTotal('assist'),
-    knocks: events('knockdown').length,
+    // Without a kill feed (Obituaries off), GEP's own knockdown events.
+    knocks: feed.length ? (downs.get(myFeedName) ?? 0) : events('knockdown').length,
     deaths: events('death').length,
     damage: Math.round(damage),
     revivesGiven: bracket ? bracket.after.revived - bracket.before.revived : 0,
@@ -383,6 +406,79 @@ function statsSnapshots(lines: RecordLine[], key: string): StatsSnapshot[] {
     });
   }
   return out.sort((a, b) => a.at - b.at);
+}
+
+// ---------------------------------------------------------------- seasons
+
+/**
+ * Each account's ranked seasons from GEP's season stats. The same season can
+ * arrive many times (every lobby, and in `_history` once it's over): the
+ * newest snapshot wins. Stats lines come in the lobby, outside any match, so
+ * they belong to the account of the next match in their session, else the
+ * previous one; a session without matches can't be attributed and is skipped.
+ */
+function seasonFacts(lines: RecordLine[], sessionMatches: Map<string, { at: string; accountKey: string }[]>): SeasonFact[] {
+  const accountOf = (l: RecordLine) => {
+    const ms = sessionMatches.get(l.session_id);
+    if (!ms) return null;
+    return (ms.find((m) => m.at >= l.received_at) ?? ms[ms.length - 1]).accountKey;
+  };
+  const newest = new Map<string, { fact: SeasonFact; at: string }>();
+  const peaks = new Map<string, number>();
+  /** Per account, the season of its newest `_latest` snapshot: the one being played. */
+  const current = new Map<string, { season: number; at: string }>();
+  for (const l of lines) {
+    if (l.key !== RANKED_STATS && l.key !== RANKED_HISTORY) continue;
+    const accountKey = accountOf(l);
+    if (!accountKey) continue;
+    const value = decode(l.value);
+    const rows = l.key === RANKED_HISTORY ? (Array.isArray(value) ? value : []) : [value];
+    for (const row of rows) {
+      const fact = seasonFact(accountKey, row);
+      if (!fact) continue;
+      const key = `${accountKey}|${fact.season}`;
+      const seen = newest.get(key);
+      if (!seen || l.received_at >= seen.at) newest.set(key, { fact, at: l.received_at });
+      if (l.key === RANKED_STATS) {
+        peaks.set(key, Math.max(peaks.get(key) ?? 0, fact.rp));
+        const c = current.get(accountKey);
+        if (!c || l.received_at >= c.at) current.set(accountKey, { season: fact.season, at: l.received_at });
+      }
+    }
+  }
+  return [...newest.values()]
+    .map(({ fact }) => ({
+      ...fact,
+      current: current.get(fact.accountKey)?.season === fact.season,
+      peakRp: peaks.get(`${fact.accountKey}|${fact.season}`) ?? null,
+    }))
+    .filter((f) => f.games > 0)
+    .sort((a, b) => a.accountKey.localeCompare(b.accountKey) || a.season - b.season);
+}
+
+function seasonFact(accountKey: string, row: unknown): SeasonFact | null {
+  const p = row as Record<string, unknown> | null;
+  if (!p || typeof p.season !== 'number' || typeof p.games !== 'number') return null;
+  const n = (k: string) => Number(p[k]) || 0;
+  return {
+    accountKey,
+    season: p.season,
+    current: false,
+    games: p.games,
+    wins: n('wins'),
+    top5s: n('top_5s'),
+    kills: n('kills'),
+    deaths: n('deaths'),
+    assists: n('assists'),
+    knocks: n('knockdowns'),
+    damage: n('damage_dealt'),
+    mostKills: n('highest_kills'),
+    mostDamage: n('highest_damage'),
+    revived: n('teammates_revived'),
+    respawned: n('teammates_respawned'),
+    rp: n('rank_score'),
+    peakRp: null,
+  };
 }
 
 /**

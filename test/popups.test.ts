@@ -101,6 +101,17 @@ test('death card: the knocker gets their own weapon; abilities and unknown guns 
   assert.equal(triggers[0].knockedBy?.weapon, 'Knuckle Cluster');
 });
 
+test('death card: grenades by name; a knocked player who dies in the ring is credited to the knocker', () => {
+  const { triggers } = track([
+    ...lobby('m1'),
+    feed('m1', '[BAD]Shark', '[T]Me', 'kill', '', 'rui/ordnance_icons/grenade_arc'),
+    ...lobby('m2'),
+    feed('m2', 'Minnow', '[T]Me', 'knockdown'),
+    feed('m2', 'Minnow', '[T]Me', 'The Ring', 'kill', ''),
+  ]);
+  assert.deepEqual(triggers.map((t) => t.player.weapon), ['Arc Star', 'The Ring']);
+});
+
 test('kill card: no weapon or damage line', () => {
   const { history, triggers } = track([...lobby('m1'), damage('m1', 'Minnow', 80), feed('m1', '[T]Me', 'Minnow', 'kill')]);
   const card = cardFor(triggers[0].player, 'm1', history);
@@ -137,7 +148,7 @@ test('card: K/D is theirs over earlier shared matches, from the whole kill feed'
   assert.equal(cardFor(triggers[0].player, 'm0', history).kd, null, 'never met before: no K/D');
 });
 
-test('lobby card: players who killed me before first, then high K/D over 2+ matches; teammates never', () => {
+test('lobby card: players who killed me before first, then high K/D over 2+ matches and 4+ kills; teammates never', () => {
   const kills = (m: string, who: string, n: number) => Array.from({ length: n }, () => feed(m, who, 'Someone', 'kill'));
   const lobbyOf = (m: string) => [
     roster(m, 0, '[T] Me', 'me', true),
@@ -145,13 +156,15 @@ test('lobby card: players who killed me before first, then high K/D over 2+ matc
     roster(m, 2, '[BAD] Shark', 'u-shark'),
     roster(m, 3, 'Ace', 'u-ace'),
     roster(m, 4, 'Minnow', 'u-minnow'),
+    roster(m, 5, 'Lucky', 'u-lucky'),
   ];
   const { history } = track([
     ...lobbyOf('m0'), ...kills('m0', 'Ace', 3), ...kills('m0', 'Mate', 5), feed('m0', 'Minnow', '[T]Me', 'kill'),
-    ...lobbyOf('m1'), ...kills('m1', 'Ace', 2), ...kills('m1', 'Shark', 1),
+    ...kills('m0', 'Lucky', 1),
+    ...lobbyOf('m1'), ...kills('m1', 'Ace', 2), ...kills('m1', 'Shark', 1), ...kills('m1', 'Lucky', 1),
     ...lobbyOf('m2'),
   ]);
-  assert.deepEqual(lobbyCards('m2', history).map((c) => c.name), ['Minnow', 'Ace'], 'Shark: K/D 1; Mate: teammate');
+  assert.deepEqual(lobbyCards('m2', history).map((c) => c.name), ['Minnow', 'Ace'], 'Shark: K/D 1; Lucky: 2 kills; Mate: teammate');
   assert.deepEqual(lobbyCards('m1', history).map((c) => c.name), ['Minnow'], 'Ace met only once before m1');
   assert.deepEqual(lobbyCards('m0', history), [], 'first match: nothing to say');
 });

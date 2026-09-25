@@ -135,6 +135,24 @@ test('a bleed-out kill counts for the gun that knocked the player', () => {
   assert.deepEqual(weapons.map((w) => [w.weapon, w.kills, w.knocks, w.damage]), [['R-301', 1, 1, 40]]);
 });
 
+test("knocks count as the game's do: every knock, plus kills of players the killer didn't knock", () => {
+  const lines = oneMatch([
+    kf('[T]Me', 'A', 'r301', 'knockdown'),
+    kf('[T]Me', 'A', '', 'Bleed_out', 'kill'), // my own knock, finished: 1
+    kf('Mate', 'B', 'r301', 'knockdown'),
+    kf('[T]Me', 'B', 'r301', 'kill'), // finishing Mate's knock: 1 for each of us
+    kf('[T]Me', 'C', 'eva8', 'kill'), // the last of a squad, never knocked: 1
+  ]);
+  const { matches, teammates, weapons } = buildDataset(lines).dataset;
+  assert.equal(matches[0].knocks, 3);
+  assert.equal(teammates[0].knocks, 1);
+  assert.deepEqual(weapons.map((w) => [w.weapon, w.kills, w.knocks]), [['R-301', 2, 2], ['EVA-8', 1, 1]]);
+});
+
+test("real: knocks equal the game's knockdowns but for one", () => {
+  assert.equal(sum(d.matches, (m) => m.knocks), 84); // the game's season stats: 85
+});
+
 test("teammates' kills and deaths come from the kill feed", () => {
   const lines = oneMatch([
     kf('Mate', 'Enemy', 'flatline', 'knockdown'),
@@ -198,6 +216,35 @@ test('until the stats come, the formula estimates the RP, flagged as such', () =
   const [m] = buildDataset([rankedStats(10, 8_600), ...lines]).dataset.matches;
   // Platinum entry 48; 3rd place 70; one kill at 3rd 18.
   assert.deepEqual([m.rpDelta, m.rpAfter, m.rpEstimated], [-48 + 70 + 18, null, true]);
+});
+
+test('real: every ranked season from the game, the current one with its recorded peak', () => {
+  assert.deepEqual(d.seasons.map((s) => [s.season, s.games, s.rp, s.current]), [
+    [25, 290, 9_404, false], [26, 272, 8_311, false], [27, 267, 9_601, false],
+    [28, 308, 10_829, false], [29, 351, 10_581, false], [30, 185, 8_689, true],
+  ]);
+  assert.ok(d.seasons.every((s) => s.accountKey === d.accounts[0].accountKey));
+  assert.equal(d.seasons.at(-1)!.peakRp, 9_022);
+  assert.equal(d.seasons[0].peakRp, null, 'no snapshots of season 25 were recorded');
+});
+
+test('season stats go to the account of the next match in their session, the newest snapshot winning', () => {
+  const at = (l: RecordLine, iso: string, session = l.session_id) => ({ ...l, received_at: iso, session_id: session });
+  const history = (rp: number) => info(null, 'player_stats_br_ranked_history', [{ season: 29, games: 300, rank_score: rp }]);
+  const latest = (games: number, rp: number) => info(null, 'player_stats_br_ranked_latest', { season: 30, games, rank_score: rp });
+  const lines = [
+    at(history(10_000), '2026-09-24T11:00:00.000Z'),
+    at(latest(10, 9_000), '2026-09-24T11:00:01.000Z'),
+    ...oneMatch(),
+    at(latest(11, 8_900), '2026-09-24T13:00:00.000Z'),
+    // A session without matches can't be attributed.
+    at(latest(99, 1), '2026-09-25T10:00:00.000Z', 's-lobby-only'),
+  ];
+  const seasons = buildDataset(lines).dataset.seasons;
+  assert.deepEqual(seasons.map((s) => [s.accountKey, s.season, s.games, s.rp, s.current, s.peakRp]), [
+    ['me-1', 29, 300, 10_000, false, null],
+    ['me-1', 30, 11, 8_900, true, 9_000],
+  ]);
 });
 
 test('the same session loaded twice counts once', () => {

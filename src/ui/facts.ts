@@ -73,12 +73,43 @@ export interface WeaponFact {
   damage: number;
 }
 
+/**
+ * One ranked season for one account, as the game reports it (GEP's
+ * `player_stats_br_ranked_latest` for the current season, `_history` for the
+ * last five), from the newest snapshot recorded. Covers every game of the
+ * season, recorded or not.
+ */
+export interface SeasonFact {
+  accountKey: string;
+  season: number;
+  /** The season being played now: its numbers are still moving. */
+  current: boolean;
+  games: number;
+  wins: number;
+  top5s: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  knocks: number;
+  damage: number;
+  /** Best single game. */
+  mostKills: number;
+  mostDamage: number;
+  revived: number;
+  respawned: number;
+  /** The game's `rank_score`: RP now for the current season, probably the end RP for past ones. */
+  rp: number;
+  /** Highest RP in our own snapshots of this season; null when none were recorded. */
+  peakRp: number | null;
+}
+
 export interface Dataset {
   accounts: Account[];
   players: Player[];
   matches: MatchFact[];
   teammates: TeammateFact[];
   weapons: WeaponFact[];
+  seasons: SeasonFact[];
   /** Start of the current ranked season (ISO date). */
   seasonStart: string;
 }

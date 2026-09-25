@@ -2,7 +2,7 @@
  * Deterministic fake history (≈4 months) for building and demoing the UI
  * before real recordings exist. Numbers are plausible, not realistic.
  */
-import type { Account, Dataset, MatchFact, Player, TeammateFact, WeaponFact } from './facts';
+import type { Account, Dataset, MatchFact, Player, SeasonFact, TeammateFact, WeaponFact } from './facts';
 import { rankOf } from './ranks';
 
 const DAY_MS = 86_400_000;
@@ -72,6 +72,8 @@ const ENTRY_COST = -48;
 const PLACEMENT_RP = [125, 95, 70, 55, 45, 30, 20, 10, 10, 10];
 const RP_PER_KILL = 9;
 const KP_CAP = 6;
+/** The season being played in the sample; the five before it come as history. */
+const CURRENT_SEASON = 30;
 
 export function generateMockData(now = new Date(), seed = 7): Dataset {
   const rnd = mulberry32(seed);
@@ -210,8 +212,37 @@ export function generateMockData(now = new Date(), seed = 7): Dataset {
     matches,
     teammates,
     weapons,
+    seasons: ACCOUNTS.flatMap((a) => mockSeasons(a.accountKey, rp.get(a.accountKey)!, mulberry32(seed + a.accountKey.length))),
     seasonStart: new Date(seasonStart).toISOString().slice(0, 10),
   };
+}
+
+/** Six seasons of plausible totals, climbing slowly towards the current RP. */
+function mockSeasons(accountKey: string, rpNow: number, rnd: () => number): SeasonFact[] {
+  return Array.from({ length: 6 }, (_, i) => {
+    const season = CURRENT_SEASON - 5 + i;
+    const current = season === CURRENT_SEASON;
+    const games = Math.round((current ? 80 : 200) + rnd() * 150);
+    const kd = 0.9 + i * 0.05 + rnd() * 0.3;
+    const deaths = Math.round(games * (0.9 + rnd() * 0.2));
+    const rp = current ? rpNow : Math.round(rpNow * (0.8 + i * 0.05) + (rnd() - 0.5) * 1_500);
+    return {
+      accountKey, season, current, games,
+      wins: Math.round(games * (0.02 + rnd() * 0.04)),
+      top5s: Math.round(games * (0.2 + rnd() * 0.1)),
+      kills: Math.round(deaths * kd),
+      deaths,
+      assists: Math.round(games * (0.5 + rnd() * 0.4)),
+      knocks: Math.round(deaths * kd * 1.4),
+      damage: Math.round(games * (650 + i * 30 + rnd() * 200)),
+      mostKills: 6 + Math.floor(rnd() * 6),
+      mostDamage: 2_600 + Math.round(rnd() * 1_400),
+      revived: Math.round(games * (0.15 + rnd() * 0.15)),
+      respawned: Math.round(games * (0.1 + rnd() * 0.15)),
+      rp,
+      peakRp: current ? rpNow + Math.round(rnd() * 400) : null,
+    };
+  });
 }
 
 function mulberry32(seed: number): () => number {

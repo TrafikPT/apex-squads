@@ -4,16 +4,21 @@
  * else), when I kill someone, and at match start when the lobby has players
  * worth knowing about. Everything comes from our own recordings: no API.
  */
-import { baseName, isAnonymousName, weaponName } from './game-names';
+import { baseName, isAnonymousName, ordnanceName, weaponName } from './game-names';
 import type { PlayerHistory } from './player-history';
 import type { RecordLine } from './recorder';
 import type { Moment, PlayerCard } from './ui/popup-card';
 
 /** Kills needed before "kill leader" means anything. */
 const KILL_LEADER_MIN = 3;
-/** Lobby card: a strong player has this K/D over at least this many earlier shared matches. */
+/**
+ * Lobby card: a strong player has this K/D over at least this many earlier
+ * shared matches and kills, so 2 kills and a death isn't enough (on 43 real
+ * matches that alone put a card in 1 lobby out of 3).
+ */
 const STRONG_KD = 2;
 const STRONG_MIN_MATCHES = 2;
+const STRONG_MIN_KILLS = 4;
 const LOBBY_MAX_PLAYERS = 4;
 /** Kill feed actions that aren't a weapon or an ability. */
 const PLAIN_ACTIONS = new Set(['kill', 'knockdown', 'headshot_kill', 'Bleed_out', 'Finisher']);
@@ -137,6 +142,7 @@ export function cardFor(seen: Seen, matchId: string, history: PlayerHistory): Pl
     metBefore,
     // Same rule as the dashboard's K/D: kills when there were no deaths.
     kd: metBefore ? kills / Math.max(deaths, 1) : null,
+    killsSeen: kills,
     theyKilledMe: before.filter((e) => e.kind === 'killed_me').length,
     iKilledThem: before.filter((e) => e.kind === 'i_killed').length,
   };
@@ -149,14 +155,14 @@ export function cardFor(seen: Seen, matchId: string, history: PlayerHistory): Pl
 export function lobbyCards(matchId: string, history: PlayerHistory): PlayerCard[] {
   return history.opponents(matchId)
     .map((uid) => cardFor({ name: history.get(uid)?.name ?? '', uid, kills: 0, killLeader: false }, matchId, history))
-    .filter((c) => c.theyKilledMe > 0 || (c.metBefore >= STRONG_MIN_MATCHES && (c.kd ?? 0) >= STRONG_KD))
+    .filter((c) => c.theyKilledMe > 0 || (c.metBefore >= STRONG_MIN_MATCHES && c.killsSeen >= STRONG_MIN_KILLS && (c.kd ?? 0) >= STRONG_KD))
     .sort((a, b) => b.theyKilledMe - a.theyKilledMe || (b.kd ?? 0) - (a.kd ?? 0))
     .slice(0, LOBBY_MAX_PLAYERS);
 }
 
-/** What a player used on me: the gun's dashboard name, else the ability ("Knuckle Cluster"). */
+/** What a player used on me: the gun's dashboard name or a grenade's, else the ability ("Knuckle Cluster"). */
 function usedOnMe(p: KillFeed): string | null {
-  if (p.weaponName) return weaponName(p.weaponName) ?? p.weaponName;
+  if (p.weaponName) return weaponName(p.weaponName) ?? ordnanceName(p.weaponName) ?? p.weaponName;
   return [p.action, p.action2].find((a) => a && !PLAIN_ACTIONS.has(a)) ?? null;
 }
 

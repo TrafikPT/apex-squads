@@ -28,7 +28,11 @@ export function isAnonymousName(name: string): boolean {
   return !!m && LEGEND_KEYS.has(m[1].toLowerCase().replace(/\s+/g, ''));
 }
 
-/** Codenames that differ from the display name. Artemis and overdrive are guesses (DESIGN.md §9.1). */
+/**
+ * Codenames that differ from the display name. Artemis is Sparrow (confirmed:
+ * my only legend in 43 matches); overdrive as Axle is inferred, the only
+ * unmatched codename when Axle was in my squads (DESIGN.md §9.1).
+ */
 const LEGEND_CODENAMES: Record<string, string> = {
   maggie: 'Mad Maggie',
   madmaggie: 'Mad Maggie',
@@ -98,6 +102,16 @@ export function weaponName(raw: string | null | undefined): string | null {
     .replace(/_(akimbo_active|takeover|crate|gold)$/, '')
     .trim();
   return WEAPONS[key] ?? null;
+}
+
+/** Grenades as the kill feed names them: "rui/ordnance_icons/grenade_frag". */
+const ORDNANCE: Record<string, string> = {
+  grenade_frag: 'Frag Grenade', grenade_incendiary: 'Thermite Grenade', grenade_arc: 'Arc Star',
+};
+
+/** A grenade's name from its kill feed code, or null. */
+export function ordnanceName(raw: string | null | undefined): string | null {
+  return ORDNANCE[raw?.split('/').pop() ?? ''] ?? null;
 }
 
 /** weaponName(), with non-guns grouped as the dashboard's "Other". */
