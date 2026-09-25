@@ -2,16 +2,16 @@ import { el, svgEl } from '../dom';
 import type { MatchFact, TeammateFact, WeaponFact } from '../facts';
 import { fixed, fmtDateTime, fmtInt, place, signed } from '../format';
 import { legendBadge } from '../portraits';
-import { groupByDay, toLocalDay } from '../stats';
+import { groupBySession, toLocalDay } from '../stats';
 import type { ViewContext, ViewResult } from './context';
 import { ESTIMATE_TITLE, rpCell, rpText } from './shared';
 
 /** The one expanded match; kept across re-renders and set from other views. */
 let expanded: string | null = null;
 
-/** Days whose matches are hidden (local YYYY-MM-DD); kept across re-renders. */
+/** Sessions whose matches are hidden (by session id); kept across re-renders. */
 const collapsed = new Set<string>();
-/** Set by openMatch: the match's day opens even if it was collapsed. */
+/** Set by openMatch: the match's session opens even if it was collapsed. */
 let revealExpanded = false;
 
 /** Opens a match's details the next time the Matches view renders. */
@@ -21,16 +21,16 @@ export function openMatch(matchId: string): void {
 }
 
 const COLUMNS = 10;
-/** Chevron, legend, time, map and squad: the day's name spans these. */
+/** Chevron, legend, time, map and squad: the session's name spans these. */
 const LEAD_COLUMNS = 5;
-/** Matches rendered per "Show more" step; whole days are always shown. */
+/** Matches rendered per "Show more" step; whole sessions are always shown. */
 const PAGE_SIZE = 100;
 let shown = PAGE_SIZE;
 /** The filters `shown` applies to: a new selection starts from one page again. */
 let shownFor = '';
 
 export function matchesView(ctx: ViewContext): ViewResult {
-  const days = groupByDay(ctx.matches);
+  const days = groupBySession(ctx.matches);
   const card = el('section', { class: 'card table-card' },
     el('h2', { class: 'card-title' }, 'Match history', el('span', { class: 'aside' }, `${ctx.matches.length} in selection`)));
   if (!days.length) {
@@ -53,7 +53,7 @@ export function matchesView(ctx: ViewContext): ViewResult {
   if (revealExpanded) {
     revealExpanded = false;
     const day = days.find((d) => d.matches.some((m) => m.matchId === expanded));
-    if (day) collapsed.delete(day.day);
+    if (day) collapsed.delete(day.id);
   }
 
   const body = el('tbody', {});
@@ -62,20 +62,20 @@ export function matchesView(ctx: ViewContext): ViewResult {
   for (const day of days) {
     if (rendered >= limit) break;
     rendered += day.matches.length;
-    // The day's averages sit under the columns they summarize; RP is the day's net.
+    // The session's averages sit under the columns they summarize; RP is its net.
     const s = day.summary;
-    const isOpen = !collapsed.has(day.day);
+    const isOpen = !collapsed.has(day.id);
     const dayStat = (text: string, title: string, cls = '') => el('td', { class: `num day-stat ${cls}`, title }, text);
-    body.append(dayRow(ctx, day.day, isOpen,
+    body.append(dayRow(ctx, day.id, isOpen,
       el('td', { colspan: String(LEAD_COLUMNS - 1) },
-        el('span', { class: 'day-name' }, fmtLongDay(day.day)),
-        el('span', { class: 'day-sum' }, `${s.matches} ${s.matches === 1 ? 'match' : 'matches'} · day averages`)),
+        el('span', { class: 'day-name' }, sessionName(day.start, day.end)),
+        el('span', { class: 'day-sum' }, `${s.matches} ${s.matches === 1 ? 'match' : 'matches'} · session averages`)),
       dayStat(place(s.avgPlacement), 'Average placement'),
-      dayStat(fixed(s.kd, 2), "The day's K/D: all kills over all deaths"),
+      dayStat(fixed(s.kd, 2), "The session's K/D: all kills over all deaths"),
       dayStat('', ''),
       dayStat(s.avgDamage === null ? '–' : fmtInt(Math.round(s.avgDamage)), 'Average damage'),
-      s.rpNet === null ? dayStat('–', 'No RP data for this day')
-        : dayStat(`${signed(s.rpNet)} RP`, 'Net RP for the day', s.rpNet >= 0 ? 'good' : 'bad'),
+      s.rpNet === null ? dayStat('–', 'No RP data for this session')
+        : dayStat(`${signed(s.rpNet)} RP`, 'Net RP for the session', s.rpNet >= 0 ? 'good' : 'bad'),
     ));
     if (!isOpen) continue;
     for (const m of day.matches) {
@@ -114,10 +114,10 @@ export function matchesView(ctx: ViewContext): ViewResult {
   };
 }
 
-/** A day's header row; click or Enter collapses or opens the day's matches. */
+/** A session's header row; click or Enter collapses or opens its matches. */
 function dayRow(ctx: ViewContext, day: string, open: boolean, ...cells: HTMLElement[]): HTMLElement {
   const row = el('tr', { class: `day-row clickable${open ? ' open' : ''}`, tabindex: '0', 'aria-expanded': String(open),
-    title: open ? 'Collapse this day' : 'Show this day' },
+    title: open ? 'Collapse this session' : 'Show this session' },
     el('td', { class: 'chevron-col' }, chevronIcon()), ...cells);
   onActivate(row, () => {
     if (open) collapsed.add(day);
@@ -259,6 +259,12 @@ function groupBy<T>(xs: T[], key: (x: T) => string): Map<string, T[]> {
     list.push(x);
   }
   return out;
+}
+
+/** "Today · Fri, 25 Sept · 15:07–18:23": the day it started, and its first and last match. */
+function sessionName(start: string, end: string): string {
+  const time = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return `${fmtLongDay(toLocalDay(new Date(start)))} · ${start === end ? time(start) : `${time(start)}–${time(end)}`}`;
 }
 
 function fmtLongDay(day: string): string {

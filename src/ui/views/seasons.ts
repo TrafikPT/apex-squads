@@ -247,7 +247,7 @@ function tableCard(rows: Row[], aside: string): HTMLElement {
     ));
   }
   return el('section', { class: 'card table-card' },
-    el('h2', { class: 'card-title' }, 'Seasons', el('span', { class: 'aside' }, `${aside} · the game's season totals, so only the Account filter applies`)),
+    el('h2', { class: 'card-title' }, 'Seasons', el('span', { class: 'aside' }, `${aside} · the game's season totals`)),
     el('div', { class: 'table-scroll' }, el('table', { class: 'seasons-table' },
       el('thead', {}, headRow([['Season', false], ['RP', true], ['Rank', false], ['Games', true], ['Wins', true], ['Top 5', true],
         ['K/D', true], ['Avg kills', true], ['Avg dmg', true], ['Most kills', true], ['Most dmg', true]])),

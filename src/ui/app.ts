@@ -20,6 +20,7 @@ import { legendsView } from './views/legends';
 import { matchesView, openMatch } from './views/matches';
 import { overviewView } from './views/overview';
 import { seasonsView } from './views/seasons';
+import { settingsView } from './views/settings';
 import { squadsView } from './views/squads';
 import { weaponsView } from './views/weapons';
 
@@ -40,6 +41,31 @@ const NAV: [View, string, string][] = [
   ['matches', 'Matches', 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01'],
   ['seasons', 'Seasons', 'M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8'],
 ];
+/** Filters shared by every page; each page shows only the ones that change what it shows. */
+type FilterKey = 'account' | 'period' | 'mode' | 'legend' | 'map' | 'withPlayers';
+const ALL_FILTERS: readonly FilterKey[] = ['account', 'period', 'mode', 'legend', 'map', 'withPlayers'];
+const VIEW_FILTERS: Record<View, readonly FilterKey[]> = {
+  overview: ALL_FILTERS, squads: ALL_FILTERS, weapons: ALL_FILTERS, legends: ALL_FILTERS, matches: ALL_FILTERS,
+  // The game's season totals can only be split by account.
+  seasons: ['account'],
+  settings: [],
+};
+
+/**
+ * Filters narrowed from their default, which stay on across pages and are
+ * easy to forget. The period isn't one: its choice is always in view.
+ */
+function activeFilters(shown: readonly FilterKey[]): FilterKey[] {
+  const d = DEFAULT_FILTERS;
+  const active: FilterKey[] = [];
+  if (filters.account !== d.account) active.push('account');
+  if (filters.mode !== d.mode) active.push('mode');
+  if (filters.legend !== d.legend) active.push('legend');
+  if (filters.map !== d.map) active.push('map');
+  if (filters.withPlayers.length) active.push('withPlayers');
+  return active.filter((k) => shown.includes(k));
+}
+
 const SETTINGS_ICON = 'M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4';
 
 // Set by useData(): in start(), before the first render, and when a match finishes.
@@ -60,7 +86,8 @@ async function loadData(): Promise<{ data: Dataset; sample: boolean }> {
   if (params.get('data') !== 'sample' && window.apex) {
     try {
       const real = await window.apex.loadDataset();
-      if (real.matches.length) return { data: real, sample: false };
+      // Season stats alone are enough: a new install shows its rank and seasons before any match.
+      if (real.matches.length || real.seasons.length) return { data: real, sample: false };
     } catch (err) {
       console.error('Could not load the recordings; showing sample data.', err);
     }
@@ -152,7 +179,8 @@ function render(): void {
       titleBar(),
       el('div', { class: 'body' },
         sidebar(),
-        el('main', { class: 'main' }, filterBar(), content.node),
+        VIEW_FILTERS[view].length ? el('main', { class: 'main' }, filterBar(VIEW_FILTERS[view]), content.node)
+          : el('main', { class: 'main no-filters' }, content.node),
       ),
     ),
   );
@@ -166,9 +194,7 @@ function renderView(ctx: ViewContext): ViewResult {
   if (view === 'legends') return legendsView(ctx);
   if (view === 'weapons') return weaponsView(ctx);
   if (view === 'seasons') return seasonsView(ctx);
-  const label = view[0].toUpperCase() + view.slice(1);
-  return { node: el('div', { class: 'view' }, el('section', { class: 'card' }, el('h2', { class: 'card-title' }, label),
-    el('div', { class: 'empty' }, 'Coming soon'))) };
+  return settingsView(ctx);
 }
 
 // ---------------------------------------------------------------- title bar
@@ -215,7 +241,8 @@ function navLink(key: View, label: string, path: string): HTMLElement {
 
 // ---------------------------------------------------------------- filters
 
-function filterBar(): HTMLElement {
+function filterBar(shown: readonly FilterKey[]): HTMLElement {
+  const active = activeFilters(shown);
   const periods = el('div', { class: 'segmented', role: 'group', 'aria-label': 'Time period' });
   for (const [value, label] of PERIODS) {
     const b = el('button', { type: 'button', 'aria-pressed': String(filters.period === value) }, label);
@@ -248,26 +275,29 @@ function filterBar(): HTMLElement {
     chips.append(chip);
   }
 
-  const reset = el('button', { type: 'button', class: 'link-button' }, 'Reset');
+  const reset = el('button', { type: 'button', class: `link-button${active.length ? ' active' : ''}`,
+    title: active.length ? `${active.length} ${active.length === 1 ? 'filter narrows' : 'filters narrow'} every page` : 'Back to the default filters' },
+  active.length ? `Reset (${active.length})` : 'Reset');
   reset.addEventListener('click', () => setFilters({ ...DEFAULT_FILTERS }));
 
   const accountOptions: [string, string][] = [['all', 'All accounts'],
     ...data.accounts.map((a) => [a.accountKey, a.rank ? `${a.name} · ${rankText(a)}` : a.name] as [string, string])];
-  return el('div', { class: 'filters' },
-    selectFilter('Account', accountOptions, filters.account, (v) => setFilters({ account: v })),
-    periodFilter,
-    selectFilter('Mode', [['ranked', 'Ranked'], ['pubs', 'Pubs'], ['all', 'All modes']], filters.mode,
+  const parts: Record<FilterKey, HTMLElement> = {
+    account: selectFilter('Account', accountOptions, filters.account, active.includes('account'), (v) => setFilters({ account: v })),
+    period: periodFilter,
+    mode: selectFilter('Mode', [['ranked', 'Ranked'], ['pubs', 'Pubs'], ['all', 'All modes']], filters.mode, active.includes('mode'),
       (v) => setFilters({ mode: v as Filters['mode'] })),
-    selectFilter('Legend', [['all', 'All legends'], ...legends.map((l) => [l, l] as [string, string])], filters.legend,
-      (v) => setFilters({ legend: v })),
-    selectFilter('Map', [['all', 'All maps'], ...maps.map((m) => [m, m] as [string, string])], filters.map,
+    legend: selectFilter('Legend', [['all', 'All legends'], ...legends.map((l) => [l, l] as [string, string])], filters.legend,
+      active.includes('legend'), (v) => setFilters({ legend: v })),
+    map: selectFilter('Map', [['all', 'All maps'], ...maps.map((m) => [m, m] as [string, string])], filters.map, active.includes('map'),
       (v) => setFilters({ map: v })),
-    el('div', { class: 'filter' }, el('span', { class: 'label' }, 'Played with'), chips),
-    reset,
-  );
+    withPlayers: el('div', { class: 'filter' }, el('span', { class: 'label' }, 'Played with'), chips),
+  };
+  return el('div', { class: 'filters' }, ...ALL_FILTERS.filter((k) => shown.includes(k)).map((k) => parts[k]), reset);
 }
 
-function selectFilter(label: string, options: [string, string][], value: string, onChange: (v: string) => void) {
+/** A labelled dropdown; `active` (narrowed from its default) gets the accent outline. */
+function selectFilter(label: string, options: [string, string][], value: string, active: boolean, onChange: (v: string) => void) {
   const select = el('select', { 'aria-label': label }) as HTMLSelectElement;
   for (const [v, text] of options) {
     const o = el('option', { value: v }, text) as HTMLOptionElement;
@@ -275,7 +305,7 @@ function selectFilter(label: string, options: [string, string][], value: string,
     select.append(o);
   }
   select.addEventListener('change', () => onChange(select.value));
-  return el('div', { class: 'filter' }, el('span', { class: 'label' }, label), select);
+  return el('div', { class: `filter${active ? ' active' : ''}` }, el('span', { class: 'label' }, label), select);
 }
 
 function rankText(a: Account): string {

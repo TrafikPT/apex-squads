@@ -39,4 +39,5 @@ export interface LobbyPopup {
   players: PlayerCard[];
 }
 
-export type Popup = EncounterPopup | LobbyPopup;
+/** As sent to the popup window: which edge the card sits against (bottom positions grow upwards). */
+export type Popup = (EncounterPopup | LobbyPopup) & { anchor?: 'top' | 'bottom' };

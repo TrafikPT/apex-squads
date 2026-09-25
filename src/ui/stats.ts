@@ -58,6 +58,11 @@ export function periodRange(f: Filters, data: Dataset, now: Date): [number, numb
 
 export function filterMatches(data: Dataset, f: Filters, now = new Date()): MatchFact[] {
   const [start, end] = periodRange(f, data, now);
+  return matchesBetween(data, f, start, end);
+}
+
+/** The matches between two times that pass every other filter. */
+function matchesBetween(data: Dataset, f: Filters, start: number, end: number): MatchFact[] {
   const squadOf = teammateIndex(data);
   return data.matches.filter((m) => {
     const t = Date.parse(m.startedAt);
@@ -174,9 +179,8 @@ export function rpSteps(matches: MatchFact[], all: MatchFact[]): RpStep[] {
   return steps;
 }
 
-export interface SeasonBaseline {
-  season: number;
-  games: number;
+/** The rates the Overview tiles compare. */
+export interface Rates {
   kd: number;
   avgKills: number;
   avgDamage: number;
@@ -184,24 +188,52 @@ export interface SeasonBaseline {
   winRate: number;
 }
 
+export interface Comparison {
+  /** What it is, as the tile says it: "prev 30 days", "last season". */
+  label: string;
+  /** How many games it covers. */
+  games: number;
+  rates: Rates;
+}
+
+/** Fewest games a comparison needs before the tiles show it. */
+export const MIN_COMPARE = 5;
+
+const PREVIOUS_LABEL: Partial<Record<PeriodPreset, string>> = { '7d': 'prev 7 days', '30d': 'prev 30 days', '90d': 'prev 90 days', custom: 'prev period' };
+
 /**
- * The current ranked season as the game counts it (every game, recorded or
- * not), over these accounts: what the selection's numbers are compared with.
+ * What the Overview tiles compare with, so "better or worse" has a fair
+ * reference. 7/30/90 days and custom ranges: the period just before, same
+ * length, with the same filters (recorded matches; a season boundary doesn't
+ * matter, only RP resets). Season: last season, from the game's own totals
+ * (ranked only). All time: nothing. Null when there's too little to compare
+ * with, as for a new install.
  */
-export function seasonBaseline(data: Dataset, accountKeys: string[]): SeasonBaseline | null {
-  const rows = data.seasons.filter((s) => s.current && accountKeys.includes(s.accountKey));
-  const games = rows.reduce((n, s) => n + s.games, 0);
-  if (!games) return null;
-  const sum = (k: 'kills' | 'deaths' | 'damage' | 'top5s' | 'wins') => rows.reduce((n, s) => n + s[k], 0);
-  return {
-    season: Math.max(...rows.map((s) => s.season)),
-    games,
-    kd: sum('kills') / Math.max(sum('deaths'), 1),
-    avgKills: sum('kills') / games,
-    avgDamage: sum('damage') / games,
-    top5Rate: sum('top5s') / games,
-    winRate: sum('wins') / games,
-  };
+export function comparisonFor(data: Dataset, f: Filters, now = new Date()): Comparison | null {
+  if (f.period === 'season') {
+    if (f.mode !== 'ranked') return null;
+    const keys = f.account === 'all' ? data.accounts.map((a) => a.accountKey) : [f.account];
+    const rows = keys.flatMap((key) => {
+      const current = data.seasons.find((s) => s.accountKey === key && s.current);
+      return current ? data.seasons.filter((s) => s.accountKey === key && s.season === current.season - 1) : [];
+    });
+    const games = rows.reduce((n, s) => n + s.games, 0);
+    if (games < MIN_COMPARE) return null;
+    const sum = (k: 'kills' | 'deaths' | 'damage' | 'top5s' | 'wins') => rows.reduce((n, s) => n + s[k], 0);
+    return {
+      label: 'last season',
+      games,
+      rates: { kd: sum('kills') / Math.max(sum('deaths'), 1), avgKills: sum('kills') / games, avgDamage: sum('damage') / games,
+        top5Rate: sum('top5s') / games, winRate: sum('wins') / games },
+    };
+  }
+  const label = PREVIOUS_LABEL[f.period];
+  const [start, end] = periodRange(f, data, now);
+  if (!label || !Number.isFinite(start)) return null;
+  const before = matchesBetween(data, f, start - (end - start), start);
+  if (before.length < MIN_COMPARE) return null;
+  const k = kpis(before);
+  return { label, games: before.length, rates: { kd: k.kd!, avgKills: k.avgKills!, avgDamage: k.avgDamage!, top5Rate: k.top5Rate!, winRate: k.winRate! } };
 }
 
 /**
@@ -324,23 +356,30 @@ export function squadStats(data: Dataset, matches: MatchFact[], regulars: Set<st
 
 // ---------------------------------------------------------------- match history
 
-export interface DayGroup {
-  day: string; // YYYY-MM-DD (local)
+export interface SessionGroup {
+  /** The session's first match: stable while the session grows. */
+  id: string;
+  /** ISO times of its first and last match. */
+  start: string;
+  end: string;
   /** Newest first. */
   matches: MatchFact[];
   summary: Kpis;
 }
 
-/** Matches grouped by local play day, newest day first. */
-export function groupByDay(matches: MatchFact[]): DayGroup[] {
-  const days = new Map<string, MatchFact[]>();
-  for (const m of [...matches].sort((a, b) => b.startedAt.localeCompare(a.startedAt))) {
-    const day = toLocalDay(new Date(m.startedAt));
-    let list = days.get(day);
-    if (!list) days.set(day, (list = []));
-    list.push(m);
-  }
-  return [...days].map(([day, list]) => ({ day, matches: list, summary: kpis(list) }));
+/**
+ * Match history by play session (a 2-hour break starts a new one), newest
+ * first: a late night stays one group across midnight, and two sittings on
+ * the same day are two.
+ */
+export function groupBySession(matches: MatchFact[]): SessionGroup[] {
+  return playSessions(matches).reverse().map((s) => ({
+    id: s[0].matchId,
+    start: s[0].startedAt,
+    end: s[s.length - 1].startedAt,
+    matches: [...s].reverse(),
+    summary: kpis(s),
+  }));
 }
 
 /**

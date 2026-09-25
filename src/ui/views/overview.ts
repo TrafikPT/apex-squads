@@ -9,15 +9,15 @@ import { fixed, fmtDateTime, fmtInt, niceTicks, pct, signed, xTickIndices } from
 import { legendBadge } from '../portraits';
 import { rankBadge } from '../rank-badge';
 import { rankName, rankOf } from '../ranks';
-import { kpis, playSessions, rankedAccount, rankGames, RpStep, rpSteps, SeasonBaseline, seasonBaseline } from '../stats';
+import { Comparison, comparisonFor, kpis, playSessions, rankedAccount, rankGames, Rates, RpStep, rpSteps } from '../stats';
 import type { ViewContext, ViewResult } from './context';
 import { openMatch } from './matches';
 import { drawRankAxis, rankTicks } from './rank-axis';
 import { clickable, rpText } from './shared';
 
 const RECENT_MATCHES = 5;
-/** Within this share of the season value, a tile says "≈ season" instead of better or worse. */
-const SAME_AS_SEASON = 0.03;
+/** Within this share of the value compared with, a tile shows "≈" instead of better or worse. */
+const SAME_AS = 0.03;
 
 export function overviewView(ctx: ViewContext): ViewResult {
   const account = shownAccount(ctx);
@@ -304,37 +304,37 @@ function recentCard(ctx: ViewContext): HTMLElement {
   return card;
 }
 
-// ---------------------------------------------------------------- tiles vs season
+// ---------------------------------------------------------------- tiles
 
 /**
- * The selection's numbers, each against the current season as the game counts
- * it (ranked only: the game's season stats are ranked). Placement has no
- * season value.
+ * The selection's numbers, each against a fair reference (comparisonFor):
+ * the period just before, or last season. None when there's nothing to
+ * compare with yet. Placement has no season value, so it shows the count.
  */
 function tiles(ctx: ViewContext): HTMLElement {
   const k = kpis(ctx.matches);
-  const accounts = ctx.filters.account === 'all' ? ctx.data.accounts.map((a) => a.accountKey) : [ctx.filters.account];
-  const season = ctx.filters.mode === 'ranked' ? seasonBaseline(ctx.data, accounts) : null;
-  const tile = (label: string, value: string, mine: number | null, base: (s: SeasonBaseline) => number, format: (v: number) => string) =>
+  const ref = comparisonFor(ctx.data, ctx.filters);
+  const tile = (label: string, value: string, mine: number | null, base: (r: Rates) => number, format: (v: number) => string) =>
     el('div', { class: 'tile' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value),
-      season && mine !== null ? versus(mine, base(season), format, season) : el('div', { class: 'vs' }, ''));
+      ref && mine !== null ? versus(mine, base(ref.rates), format, ref) : el('div', { class: 'vs' }, ''));
   return el('div', { class: 'tiles overview-tiles' },
     el('div', { class: 'tile' }, el('div', { class: 'label' }, 'Avg placement'),
       el('div', { class: 'value' }, k.avgPlacement === null ? '–' : `#${k.avgPlacement.toFixed(1)}`),
       el('div', { class: 'vs' }, `${fmtInt(k.matches)} ${k.matches === 1 ? 'match' : 'matches'}`)),
-    tile('K/D', fixed(k.kd, 2), k.kd, (s) => s.kd, (v) => v.toFixed(2)),
-    tile('Avg kills', fixed(k.avgKills, 2), k.avgKills, (s) => s.avgKills, (v) => v.toFixed(2)),
-    tile('Avg damage', k.avgDamage === null ? '–' : fmtInt(k.avgDamage), k.avgDamage, (s) => s.avgDamage, fmtInt),
-    tile('Top 5', pct(k.top5Rate), k.top5Rate, (s) => s.top5Rate, pct),
-    tile('Wins', pct(k.winRate), k.winRate, (s) => s.winRate, pct),
+    tile('K/D', fixed(k.kd, 2), k.kd, (r) => r.kd, (v) => v.toFixed(2)),
+    tile('Avg kills', fixed(k.avgKills, 2), k.avgKills, (r) => r.avgKills, (v) => v.toFixed(2)),
+    tile('Avg damage', k.avgDamage === null ? '–' : fmtInt(k.avgDamage), k.avgDamage, (r) => r.avgDamage, fmtInt),
+    tile('Top 5', pct(k.top5Rate), k.top5Rate, (r) => r.top5Rate, pct),
+    tile('Wins', pct(k.winRate), k.winRate, (r) => r.winRate, pct),
   );
 }
 
-/** "season 1.23 ▼": better or worse than the season, or about the same. */
-function versus(mine: number, season: number, format: (v: number) => string, s: SeasonBaseline): HTMLElement {
-  const same = Math.abs(mine - season) <= Math.abs(season) * SAME_AS_SEASON;
-  const better = mine > season;
-  return el('div', { class: 'vs', title: `Season ${s.season}: ${fmtInt(s.games)} games, as the game counts them` },
-    `season ${format(season)} `,
+/** "prev 30 days 1.10 ▲": better or worse than the reference, or about the same. */
+function versus(mine: number, theirs: number, format: (v: number) => string, ref: Comparison): HTMLElement {
+  const same = Math.abs(mine - theirs) <= Math.abs(theirs) * SAME_AS;
+  const better = mine > theirs;
+  const games = `${fmtInt(ref.games)} games`;
+  return el('div', { class: 'vs', title: ref.label === 'last season' ? `Last season as the game counts it: ${games}` : `The ${ref.label.slice(5)} before these: ${games} recorded` },
+    `${ref.label} ${format(theirs)} `,
     same ? el('span', { class: 'muted' }, '≈') : el('span', { class: better ? 'good' : 'bad' }, better ? '▲' : '▼'));
 }

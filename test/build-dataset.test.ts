@@ -135,6 +135,26 @@ test('a bleed-out kill counts for the gun that knocked the player', () => {
   assert.deepEqual(weapons.map((w) => [w.weapon, w.kills, w.knocks, w.damage]), [['R-301', 1, 1, 40]]);
 });
 
+test('a new install: season stats from a lobby with no matches yet still give an account and its seasons', () => {
+  const lobby = (key: string, value: unknown) => ({ ...info(null, key, value), session_id: 'lobby-only', feature: key === 'name' ? 'me' : null });
+  const { accounts, seasons, matches } = buildDataset([
+    lobby('name', '[T] NewPlayer'),
+    lobby('player_stats_br_ranked_latest', { season: 30, games: 12, rank_score: 3_200 }),
+    lobby('player_stats_br_ranked_history', [{ season: 29, games: 80, rank_score: 4_100 }]),
+  ]).dataset;
+  assert.equal(matches.length, 0);
+  assert.deepEqual(accounts.map((a) => [a.accountKey, a.name, a.rank?.tier]), [['name:NewPlayer', '[T] NewPlayer', 'Silver']]);
+  assert.deepEqual(seasons.map((s) => [s.accountKey, s.season, s.current]), [['name:NewPlayer', 29, false], ['name:NewPlayer', 30, true]]);
+});
+
+test('a lobby-only session goes to the account with that name once it has matches', () => {
+  const lines = [...oneMatch(), { ...info(null, 'name', '[T] Me'), session_id: 's2', feature: 'me' },
+    { ...info(null, 'player_stats_br_ranked_latest', { season: 30, games: 12, rank_score: 8_700 }), session_id: 's2' }];
+  const { accounts, seasons } = buildDataset(lines).dataset;
+  assert.deepEqual(accounts.map((a) => a.accountKey), ['me-1']);
+  assert.deepEqual(seasons.map((s) => s.accountKey), ['me-1']);
+});
+
 test("knocks count as the game's do: every knock, plus kills of players the killer didn't knock", () => {
   const lines = oneMatch([
     kf('[T]Me', 'A', 'r301', 'knockdown'),

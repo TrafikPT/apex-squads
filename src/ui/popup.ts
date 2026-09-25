@@ -13,6 +13,7 @@ import type { EncounterPopup, LobbyPopup, PlayerCard } from './popup-card';
 const root = document.getElementById('popup')!;
 
 window.apex?.onPopup((popup) => {
+  document.body.classList.toggle('anchor-bottom', popup.anchor === 'bottom');
   root.replaceChildren(popup.moment === 'lobby' ? renderLobby(popup) : render(popup));
 });
 

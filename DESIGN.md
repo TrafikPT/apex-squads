@@ -662,6 +662,13 @@ remove:
   function.
 - **Conditional cards.** An insight card returns null when it has nothing to
   say, and then takes no space.
+- **Filters are shared by every page** (a question like "last 30 days, as
+  Sparrow, with a friend" is answered by every tab, and the links between
+  tabs rely on it), but each page shows only the ones that change it
+  (`VIEW_FILTERS` in `src/ui/app.ts`: Seasons has Account only, Settings
+  none). A filter narrowed from its default gets the accent outline and
+  counts in "Reset (n)", so one set on another page isn't forgotten; the
+  period isn't counted, its choice is always in view.
 - **Show sample size.** Every rate or average shows its *n*. Rows under
   `MIN_SAMPLE` (3 games, `src/ui/views/shared.ts`) are never picked as
   "best". Nothing is faded (decided 2026-09-25): a row that's listed shows its
@@ -709,9 +716,9 @@ Overwolf's overlay replaces it once the app is approved.
 ### Planned
 | Where | Feature |
 |---|---|
-| Overview | ~~Redesign~~ **done (2026-09-25)**: the first screen answers where I stand, how the last session went and whether I'm getting better. **Your rank** (badge, RP, progress to the next division, season peak and games; from the game's season stats, so it shows before any match is recorded, and ignores the filters). **Last session** (a 2-hour break starts a new one: matches, net RP, wins, best and worst game). **RP, match by match** on the rank bands (one account) or as a running total (several), sessions marked, RP from games not recorded shown as a dashed step and in the title (it explained a −50 net against a rising line). **Recent matches** (last 5). **Six tiles against the season** as the game counts it (ranked only; "≈" within 3%) |
+| Overview | ~~Redesign~~ **done (2026-09-25)**: the first screen answers where I stand, how the last session went and whether I'm getting better. **Your rank** (badge, RP, progress to the next division, season peak and games; from the game's season stats, so it shows before any match is recorded, and ignores the filters). **Last session** (a 2-hour break starts a new one: matches, net RP, wins, best and worst game). **RP, match by match** on the rank bands (one account) or as a running total (several), sessions marked, RP from games not recorded shown as a dashed step and in the title (it explained a −50 net against a rising line). **Recent matches** (last 5). **Six tiles, each against a fair reference** (`comparisonFor`): 7/30/90 days and custom ranges against the period just before, same length and filters (5+ recorded matches, else nothing); Season against last season as the game counts it (ranked only); All time against nothing. Comparing with the current season was dropped: the selection is part of it, and a 30-day range can start in the previous season. "≈" within 3%. A new install (season stats but no matches yet) sees its own rank and seasons, not sample data: lobby-only stats go to the account by its `me.name` |
 | Overview | "Games to next rank" at the current RP per game (one account only) |
-| Matches | Group by play session (`playSessions`, 2-hour break; the Overview uses it already) instead of the calendar day, so late nights stay together, with net RP per session. Done meanwhile: a Map column, squad names in a fixed order (most games together first), revives split into Revives / Picked up |
+| Matches | ~~Group by play session~~ **done (2026-09-25)**: `groupBySession` (a 2-hour break starts a new one, as on the Overview) instead of the calendar day, so a late night stays one group and two sittings in a day are two; the header gives the day and the first and last match's times, with the session's averages and net RP. Also done: a Map column, squad names in a fixed order (most games together first), revives split into Revives / Picked up |
 | Weapons | ~~Loadouts by gun~~ **done (2026-09-25)**: 31 loadouts in 43 games were too thin to compare, so the Loadouts table has one row per gun (every game it was one of my two) and opens to its pairings |
 | Squads | Support stats: knocked squadmates revived vs lost, how often I get picked up, how many knocks become kills (mine or the squad's) |
 | Weapons | Personal tier list: kills per match with the gun and damage share, normalised for games played. Not win rate: guns held late in a match correlate with surviving |
@@ -719,6 +726,7 @@ Overwolf's overlay replaces it once the app is approved.
 | Seasons | ~~Season history~~ **done (2026-09-25)**, its own tab: my ranked seasons as the game counts them (`player_stats_br_ranked_latest` / `_history`; every game, recorded or not), one account at a time (All accounts shows the most-played one). Best season by RP, this season with the peak from our own snapshots, best K/D and damage; RP by season on the rank bands; one row per season with the best value per column in bold. `rank_score` is probably the end RP (no peak for past seasons), and older ranks are approximate (the thresholds changed), so they show as "≈". Lobby stats lines go to the account of the next match in their session. History keeps growing: GEP only sends the last 5 seasons, but old recordings keep theirs |
 | Overview / Matches | **Contested landings**: enemy squads engaged in the first 3 min after `landed` (my damage targets plus squad kill-feed fights, by roster `team_id`). In the 23 recorded matches: 3+ squads in 7 (avg placement 13.9), 0–2 in 16 (avg 9.8). Lets hot drops be judged by what happened, not where we landed |
 | Matches | **Third parties** (try it, then decide): a death where I'd been damaging squad A and was knocked by squad B within a short window. A heuristic: check on real matches before showing it |
+| Settings | ~~Popup settings~~ **done (2026-09-25)**: kill/death cards and the lobby card on or off, position (six spots), how long they stay (4/7/10/15 s), a test button. One JSON file in the system's app-data folder (`Apex Squads/settings.json`, `src/settings-store.ts`), read by the popup window before each popup, so it applies to every entry point (Overwolf app, `popup:live`) without a restart. The filter bar is hidden on Settings |
 | Settings | Diagnostics: recent `lifecycle` errors, GEP feature status. Maybe: ranked games not recorded, from the `games` count in `player_stats` (7 on 24 Sept) |
 | Settings | Obituaries check: warn when a match has no `kill_feed` lines |
 | Settings | Choose the recordings folder (e.g. a OneDrive folder, for backup and several PCs). `main.ts` already reads `APEX_SQUADS_DATA_DIR` (default `%APPDATA%\Apex Squads`, the app's userData folder as in Overwolf's storage guide; moved from `Documents\ApexTracker` on 2026-09-28) |

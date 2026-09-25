@@ -7,8 +7,12 @@ import { BrowserWindow, app, ipcMain } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildDataset } from './build-dataset';
+import { PopupWindow } from './popup-window';
 import { IN_MATCH_PHASES } from './recorder';
 import { readRecordings } from './recordings';
+import { loadSettings, saveSettings } from './settings-store';
+import type { Settings } from './ui/app-settings';
+import type { Popup } from './ui/popup-card';
 
 const TITLE_BAR_HEIGHT = 40;
 const BACKGROUND = '#0e0f11';
@@ -23,8 +27,29 @@ const STALE_MS = 5 * 60_000;
 /** Enough of a recording's end to hold its last phase line: a match writes several lines a second. */
 const TAIL_BYTES = 256 * 1024;
 
+/** What the Settings test button shows: a made-up death card. */
+const TEST_POPUP: Popup = {
+  moment: 'killed_by',
+  at: new Date(0).toISOString(),
+  player: {
+    name: 'Test popup', anonymous: false, kills: 3, killLeader: true, weapon: 'R-301', damageFromMe: 142,
+    metBefore: 2, kd: 1.5, killsSeen: 3, theyKilledMe: 1, iKilledThem: 0,
+  },
+};
+let testPopups: PopupWindow | null = null;
+
 /** @param recordingsDirs where the dashboard's data comes from (every .jsonl in them). */
 export function createMainWindow(recordingsDirs: string[]): BrowserWindow {
+  ipcMain.removeHandler('apex:settings');
+  ipcMain.handle('apex:settings', () => loadSettings());
+  ipcMain.removeHandler('apex:save-settings');
+  ipcMain.handle('apex:save-settings', (_e, settings: Settings) => saveSettings(settings));
+  ipcMain.removeHandler('apex:test-popup');
+  ipcMain.handle('apex:test-popup', () => {
+    testPopups ??= new PopupWindow();
+    testPopups.show(TEST_POPUP, true);
+  });
+
   ipcMain.removeHandler('apex:dataset');
   ipcMain.handle('apex:dataset', () => {
     // Rebuilt from the raw lines on every load, so stat fixes apply to all history.

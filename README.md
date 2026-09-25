@@ -98,6 +98,11 @@ npm run popup:preview   # replays your latest recorded match's popups, 4 s apart
 `APEX_REPLAY_MATCH=<match id>` picks another match. The cards use only the
 recordings (no API key needed); see DESIGN.md §12.
 
+Which popups show, where and for how long is set in the dashboard's Settings
+tab and saved to `Apex Squads/settings.json` in the system's app-data folder
+(`%APPDATA%` on Windows); every entry point reads it before each popup.
+`APEX_SETTINGS_FILE=<file>` uses another file.
+
 ### Live, from the Overwolf client's log (before we had Dev Mode)
 Superseded by `npm start`; kept for replaying old logs. While another Apex
 app (e.g. TRN's tracker) runs, the Overwolf client logs

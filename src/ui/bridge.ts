@@ -1,3 +1,4 @@
+import type { Settings } from './app-settings';
 import type { Dataset } from './facts';
 import type { Popup } from './popup-card';
 
@@ -6,6 +7,11 @@ export interface ApexBridge {
   loadDataset(): Promise<Dataset>;
   /** A match finished since the last load. */
   onDatasetChanged(callback: () => void): void;
+  loadSettings(): Promise<Settings>;
+  /** Saves and returns what was stored (invalid values replaced by defaults). */
+  saveSettings(settings: Settings): Promise<Settings>;
+  /** Shows a made-up popup where the settings put it, even if popups are off. */
+  testPopup(): Promise<void>;
   onPopup(callback: (popup: Popup) => void): void;
 }
 

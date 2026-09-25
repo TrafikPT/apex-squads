@@ -102,6 +102,15 @@ export function buildDataset(lines: RecordLine[]): BuildResult {
   matches.sort((a, b) => a.startedAt.localeCompare(b.startedAt));
   estimateMissingRp(matches, rpBefore);
 
+  const seasonStats = seasonFacts(lines, sessionMatches,
+    new Map([...accounts].map(([key, a]) => [baseName(a.name), key])));
+  // An account seen only in the lobby so far (a new install): known from its season stats.
+  for (const [key, name] of seasonStats.names) {
+    if (accounts.has(key)) continue;
+    const current = seasonStats.facts.find((f) => f.accountKey === key && f.current);
+    accounts.set(key, { name, lastAt: '', rp: current?.rp ?? null });
+  }
+
   return {
     dataset: {
       accounts: [...accounts].map(([accountKey, a]): Account => {
@@ -116,7 +125,7 @@ export function buildDataset(lines: RecordLine[]): BuildResult {
       matches,
       teammates,
       weapons,
-      seasons: seasonFacts(lines, sessionMatches),
+      seasons: seasonStats.facts,
       seasonStart: apiSeasonStart(lines) ?? seasonStart(matches, seasons),
     },
     incomplete,
@@ -415,13 +424,25 @@ function statsSnapshots(lines: RecordLine[], key: string): StatsSnapshot[] {
  * arrive many times (every lobby, and in `_history` once it's over): the
  * newest snapshot wins. Stats lines come in the lobby, outside any match, so
  * they belong to the account of the next match in their session, else the
- * previous one; a session without matches can't be attributed and is skipped.
+ * previous one. A session without matches (a new install that hasn't played
+ * yet) goes by the lobby's player name (`me.name`): the account with that
+ * name, or a new one keyed on it. `names` lists every account seen here.
  */
-function seasonFacts(lines: RecordLine[], sessionMatches: Map<string, { at: string; accountKey: string }[]>): SeasonFact[] {
+function seasonFacts(lines: RecordLine[], sessionMatches: Map<string, { at: string; accountKey: string }[]>,
+  accountByName: Map<string, string>): { facts: SeasonFact[]; names: Map<string, string> } {
+  const lobbyName = new Map<string, string>();
+  for (const l of lines) {
+    if (l.feature === 'me' && l.key === 'name' && typeof l.value === 'string' && l.value) lobbyName.set(l.session_id, l.value);
+  }
+  const names = new Map<string, string>();
   const accountOf = (l: RecordLine) => {
     const ms = sessionMatches.get(l.session_id);
-    if (!ms) return null;
-    return (ms.find((m) => m.at >= l.received_at) ?? ms[ms.length - 1]).accountKey;
+    if (ms) return (ms.find((m) => m.at >= l.received_at) ?? ms[ms.length - 1]).accountKey;
+    const name = lobbyName.get(l.session_id);
+    if (!name) return null;
+    const key = accountByName.get(baseName(name)) ?? `name:${baseName(name)}`;
+    names.set(key, name);
+    return key;
   };
   const newest = new Map<string, { fact: SeasonFact; at: string }>();
   const peaks = new Map<string, number>();
@@ -446,7 +467,7 @@ function seasonFacts(lines: RecordLine[], sessionMatches: Map<string, { at: stri
       }
     }
   }
-  return [...newest.values()]
+  const facts = [...newest.values()]
     .map(({ fact }) => ({
       ...fact,
       current: current.get(fact.accountKey)?.season === fact.season,
@@ -454,6 +475,7 @@ function seasonFacts(lines: RecordLine[], sessionMatches: Map<string, { at: stri
     }))
     .filter((f) => f.games > 0)
     .sort((a, b) => a.accountKey.localeCompare(b.accountKey) || a.season - b.season);
+  return { facts, names };
 }
 
 function seasonFact(accountKey: string, row: unknown): SeasonFact | null {

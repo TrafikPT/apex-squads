@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Dataset, MatchFact } from '../src/ui/facts';
 import { generateMockData } from '../src/ui/mock-data';
-import { compStats, DEFAULT_FILTERS, filterMatches, groupByDay, gunLoadoutStats, kpis, legendStats, loadoutStats, matchLoadout, playSessions, rankedAccount, rankGames, regularPlayers, rpSteps, seasonBaseline, squadStats, teammateStats, weaponStats } from '../src/ui/stats';
+import { compStats, DEFAULT_FILTERS, filterMatches, groupBySession, gunLoadoutStats, kpis, legendStats, loadoutStats, matchLoadout, playSessions, rankedAccount, rankGames, regularPlayers, rpSteps, comparisonFor, squadStats, teammateStats, weaponStats } from '../src/ui/stats';
 import { niceTicks } from '../src/ui/format';
 import { divisionFloors, rankName, rankOf } from '../src/ui/ranks';
 import { weaponClass } from '../src/ui/weapons';
@@ -134,16 +134,29 @@ test('rpSteps: across accounts only the running total, no levels or gaps', () =>
   assert.deepEqual(steps.map((s) => [s.level, s.cumulative, s.unrecorded]), [[null, 10, 0], [null, 20, 0]]);
 });
 
-test('seasonBaseline: the current season over the chosen accounts', () => {
-  const season = (accountKey: string, current: boolean, games: number, kills: number) => ({
-    accountKey, season: current ? 30 : 29, current, games, wins: 1, top5s: games / 4, kills, deaths: games, assists: 0, knocks: 0,
+test('comparisonFor: the period before, same length and filters, once it has 5+ matches', () => {
+  const at = (daysAgo: number) => new Date(NOW.getTime() - daysAgo * 86_400_000);
+  const recent = [1, 2, 3].map((d) => match(`now${d}`, at(d), { kills: 3 }));
+  const before = (n: number) => Array.from({ length: n }, (_, i) => match(`old${i}`, at(31 + i), { kills: 1 }));
+  const f = { ...DEFAULT_FILTERS, period: '30d' as const };
+  const ref = comparisonFor(dataset([...recent, ...before(5), match('pubs', at(35), { mode: 'pubs' })]), f, NOW)!;
+  assert.deepEqual([ref.label, ref.games, ref.rates.avgKills], ['prev 30 days', 5, 1], 'pubs left out, like the selection');
+  assert.equal(comparisonFor(dataset([...recent, ...before(4)]), f, NOW), null, '4 matches: too few');
+  assert.equal(comparisonFor(dataset([...recent, ...before(5)]), { ...f, period: 'all' }, NOW), null, 'nothing before all time');
+});
+
+test('comparisonFor: the Season period compares with last season, as the game counts it', () => {
+  const season = (n: number, current: boolean, games: number, kills: number) => ({
+    accountKey: 'a1', season: n, current, games, wins: 1, top5s: games / 4, kills, deaths: games, assists: 0, knocks: 0,
     damage: games * 800, mostKills: 0, mostDamage: 0, revived: 0, respawned: 0, rp: 8_000, peakRp: null,
   });
-  const data = { ...dataset([]), seasons: [season('a1', true, 100, 120), season('a1', false, 300, 999), season('a2', true, 100, 80)] };
-  const both = seasonBaseline(data, ['a1', 'a2'])!;
-  assert.deepEqual([both.games, both.kd, both.avgDamage, both.top5Rate], [200, 1, 800, 0.25]);
-  assert.equal(seasonBaseline(data, ['a1'])!.kd, 1.2);
-  assert.equal(seasonBaseline(data, ['nobody']), null);
+  const data = { ...dataset([]), accounts: [{ accountKey: 'a1', alias: 'Me', name: 'Me' }],
+    seasons: [season(28, false, 50, 999), season(29, false, 100, 120), season(30, true, 40, 80)] };
+  const ref = comparisonFor(data, { ...DEFAULT_FILTERS, period: 'season' }, NOW)!;
+  assert.deepEqual([ref.label, ref.games, ref.rates.kd, ref.rates.top5Rate], ['last season', 100, 1.2, 0.25]);
+  assert.equal(comparisonFor(data, { ...DEFAULT_FILTERS, period: 'season', mode: 'all' }, NOW), null, 'season stats are ranked only');
+  assert.equal(comparisonFor({ ...data, seasons: [season(30, true, 40, 80)] }, { ...DEFAULT_FILTERS, period: 'season' }, NOW), null,
+    'no last season yet');
 });
 
 test('mock data is deterministic and internally consistent', () => {
@@ -209,15 +222,16 @@ test('squad stats group by friends in the squad, ignoring randoms', () => {
   assert.equal(rows[0].friends.join('+'), 'A+B', 'most games first');
 });
 
-test('groupByDay: newest day first, newest match first, with a summary', () => {
-  const groups = groupByDay([
+test('groupBySession: newest session first, newest match first; a late night stays one session', () => {
+  const groups = groupBySession([
     match('a', new Date(2026, 8, 20, 21), { rpDelta: 30 }),
     match('b', new Date(2026, 8, 21, 20), { rpDelta: -10 }),
     match('c', new Date(2026, 8, 20, 23), { rpDelta: 5 }),
+    match('d', new Date(2026, 8, 21, 0, 30), { rpDelta: 1 }), // after midnight, 1.5 h after c
   ]);
-  assert.deepEqual(groups.map((g) => g.day), ['2026-09-21', '2026-09-20']);
-  assert.deepEqual(groups[1].matches.map((m) => m.matchId), ['c', 'a']);
-  assert.equal(groups[1].summary.rpNet, 35);
+  assert.deepEqual(groups.map((g) => g.matches.map((m) => m.matchId)), [['b'], ['d', 'c'], ['a']]);
+  assert.equal(groups[1].summary.rpNet, 6);
+  assert.equal(groups[1].id, 'c');
 });
 
 test('legendStats: games, pick rate and my numbers per legend', () => {

@@ -18,6 +18,8 @@ html, body { margin: 0; background: transparent; overflow: hidden; }
 body { font: 13px/1.4 var(--font); color: var(--text-primary); -webkit-font-smoothing: antialiased; user-select: none; }
 
 #popup { padding: 8px; }
+/* Bottom positions: the card sits on the window's bottom edge, so it grows upwards. */
+body.anchor-bottom { height: 100vh; display: flex; flex-direction: column; justify-content: flex-end; }
 
 .card {
   background: var(--surface);
