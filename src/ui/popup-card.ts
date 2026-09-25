@@ -6,9 +6,8 @@ export interface PlayerCard {
   name: string;
   /** Plays in anonymous mode ("Fuse2676"): can't be identified, so no rank or history. */
   anonymous: boolean;
-  /** Their kills and knocks this match, up to this moment. */
+  /** Their kills this match, up to this moment. */
   kills: number;
-  knocks: number;
   /** Most kills in the lobby so far, with at least 3. */
   killLeader: boolean;
   /** Current rank from the API; null without a key, or when the lookup failed. */
@@ -19,6 +18,8 @@ export interface PlayerCard {
   topPercent: number | null;
   /** Earlier matches only (this one excluded). */
   metBefore: number;
+  /** Their K/D over the earlier matches we shared, from the kill feed; null when never met. */
+  kd: number | null;
   theyKilledMe: number;
   iKilledThem: number;
 }

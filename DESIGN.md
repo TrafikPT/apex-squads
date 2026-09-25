@@ -654,8 +654,10 @@ look the player up early so the card is ready. It shows:
 - their **current rank** (API), and the **peak rank we've seen** for them,
   only when it's higher than the current one (from `player_lookup` lines);
 - level and "top X%" (API);
-- their kills and knocks **this match**, with **kill leader** from 3 kills;
-- history: matches shared before, how often they killed me or I killed them.
+- their kills **this match**, with **kill leader** from 3 kills;
+- history: matches shared before, their **K/D over those matches** (the kill
+  feed covers the whole lobby, so it firms up the more often we meet), and how
+  often they killed me or I killed them.
 
 Code: `src/encounters.ts` (when a popup fires, the card),
 `src/player-history.ts`, `src/popup-service.ts` (one lookup per player per

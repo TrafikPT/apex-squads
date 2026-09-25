@@ -43,12 +43,13 @@ function playerLines(c: PlayerCard): HTMLElement[] {
   const extra = [c.level !== null ? `Level ${c.level}` : '', c.topPercent !== null ? `top ${fmtPct(c.topPercent)}` : ''].filter(Boolean);
   if (extra.length) lines.push(el('div', { class: 'meta' }, extra.join(' · ')));
 
-  const match = el('div', { class: 'match' }, `${c.kills} ${c.kills === 1 ? 'kill' : 'kills'} · ${c.knocks} ${c.knocks === 1 ? 'knock' : 'knocks'} this match`);
+  const match = el('div', { class: 'match' }, `${c.kills} ${c.kills === 1 ? 'kill' : 'kills'} this match`);
   if (c.killLeader) match.append(el('span', { class: 'chip' }, 'Kill leader'));
   lines.push(match);
 
   if (c.metBefore || c.theyKilledMe || c.iKilledThem) {
     const parts = [`met ${c.metBefore}× before`];
+    if (c.kd !== null) parts.push(`K/D ${c.kd.toFixed(2)}`);
     if (c.theyKilledMe) parts.push(`killed you ${c.theyKilledMe}×`);
     if (c.iKilledThem) parts.push(`you killed them ${c.iKilledThem}×`);
     lines.push(el('div', { class: 'history' }, parts.join(' · ')));

@@ -115,6 +115,26 @@ test('card: history counts earlier matches only; peak only when above the curren
   assert.equal(cardFor(triggers[1].player, 'm1', history).peak, null, 'current rank is the peak: not repeated');
 });
 
+test('card: K/D is theirs over earlier shared matches, from the whole kill feed', () => {
+  const { history, triggers } = track([
+    ...lobby('m0'),
+    feed('m0', '[BAD]Shark', 'Someone', 'knockdown'),
+    feed('m0', '[BAD]Shark', 'Someone', 'Bleed_out', 'kill'),
+    feed('m0', '[BAD]Shark', 'Minnow', 'kill'),
+    feed('m0', '[BAD]Shark', '[T]Me', 'headshot_kill'),
+    feed('m0', 'Someone', '[BAD]Shark', 'kill'),
+    ...lobby('m1'),
+    feed('m1', '[BAD]Shark', 'Someone', 'kill'),
+    feed('m1', '[T]Me', '[BAD]Shark', 'kill'),
+  ]);
+  const shark = cardFor(triggers.at(-1)!.player, 'm1', history);
+  assert.equal(shark.kd, 3, '3 kills, 1 death in m0; m1 (this match) left out');
+  assert.equal(shark.kills, 1, 'this match: kills only, knocks not counted');
+
+  const first = track([...lobby('m0'), feed('m0', '[T]Me', 'Minnow', 'kill')]);
+  assert.equal(cardFor(first.triggers[0].player, 'm0', first.history).kd, null, 'never met before: no K/D');
+});
+
 test('real matches: one "you killed" per kill of mine; popup players are identified or anonymous', () => {
   const lines = readRecordings([path.join(__dirname, '..', '..', 'fixtures', 'recordings')]);
   const { triggers } = track(lines);

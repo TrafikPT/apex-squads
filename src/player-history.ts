@@ -1,7 +1,8 @@
 /**
  * What we know about other players, from every recording: lobbies shared
- * with me, fights with me, and every rank an API lookup returned. The peak
- * rank is the highest one *we* have seen for them, so it grows over the years.
+ * with me, fights with me, their kills and deaths in the kill feed, and every
+ * rank an API lookup returned. The peak rank is the highest one *we* have
+ * seen for them, so it grows over the years.
  */
 import { baseName } from './game-names';
 import type { RecordLine } from './recorder';
@@ -23,6 +24,8 @@ export interface PlayerRecord {
   name: string;
   lobbies: Set<string>;
   encounters: { matchId: string; kind: EncounterKind }[];
+  /** Per match: their kills and deaths in the kill feed (it covers the whole lobby). */
+  fights: Map<string, { kills: number; deaths: number }>;
   latest: RankSeen | null;
   peak: RankSeen | null;
   level: number | null;
@@ -76,6 +79,10 @@ export class PlayerHistory {
       const attacker = baseName(p.attackerName ?? '');
       const victim = baseName(p.victimName ?? '');
       const knock = p.action === 'knockdown' || p.action2 === 'knockdown';
+      if (!knock && attacker !== victim) {
+        if (attacker) this.fight(l.match_id, attacker).kills++;
+        if (victim) this.fight(l.match_id, victim).deaths++;
+      }
       if (attacker === me && victim && victim !== me) this.encounter(l.match_id, victim, knock ? 'i_knocked' : 'i_killed');
       if (victim === me && attacker && attacker !== me) this.encounter(l.match_id, attacker, knock ? 'knocked_me' : 'killed_me');
     }
@@ -93,6 +100,16 @@ export class PlayerHistory {
   private encounter(matchId: string, name: string, kind: EncounterKind): void {
     const uid = this.uidOf(matchId, name);
     if (uid) this.ensure(uid).encounters.push({ matchId, kind });
+  }
+
+  /** Kills and deaths of a player in a match; a throwaway row when we can't identify them. */
+  private fight(matchId: string, name: string): { kills: number; deaths: number } {
+    const uid = this.uidOf(matchId, name);
+    if (!uid) return { kills: 0, deaths: 0 };
+    const rec = this.ensure(uid);
+    let f = rec.fights.get(matchId);
+    if (!f) rec.fights.set(matchId, (f = { kills: 0, deaths: 0 }));
+    return f;
   }
 
   private addLookup(l: RecordLine): void {
@@ -124,7 +141,7 @@ export class PlayerHistory {
   private ensure(uid: string): PlayerRecord {
     let rec = this.players.get(uid);
     if (!rec) {
-      rec = { uid, name: '', lobbies: new Set(), encounters: [], latest: null, peak: null, level: null, topPercent: null };
+      rec = { uid, name: '', lobbies: new Set(), encounters: [], fights: new Map(), latest: null, peak: null, level: null, topPercent: null };
       this.players.set(uid, rec);
     }
     return rec;

@@ -16,7 +16,6 @@ export interface Seen {
   name: string;
   uid: string | null;
   kills: number;
-  knocks: number;
   killLeader: boolean;
 }
 
@@ -36,7 +35,8 @@ export interface TrackerOutput {
 
 export class EncounterTracker {
   private matchId: string | null = null;
-  private stats = new Map<string, { kills: number; knocks: number }>();
+  /** Kills this match, per attacker name. */
+  private kills = new Map<string, number>();
   /** Who knocked me, until I'm revived, respawned or killed. */
   private knockedMeBy: string | null = null;
 
@@ -47,7 +47,7 @@ export class EncounterTracker {
     if (!l.match_id) return out;
     if (l.match_id !== this.matchId) {
       this.matchId = l.match_id;
-      this.stats = new Map();
+      this.kills = new Map();
       this.knockedMeBy = null;
     }
     if (l.kind === 'event' && (l.key === 'healed_from_ko' || l.key === 'respawn')) this.knockedMeBy = null;
@@ -59,12 +59,7 @@ export class EncounterTracker {
     const attacker = baseName(p.attackerName ?? '');
     const victim = baseName(p.victimName ?? '');
     const knock = p.action === 'knockdown' || p.action2 === 'knockdown';
-    if (attacker) {
-      const s = this.stats.get(attacker) ?? { kills: 0, knocks: 0 };
-      if (knock) s.knocks++;
-      else s.kills++;
-      this.stats.set(attacker, s);
-    }
+    if (attacker && !knock) this.kills.set(attacker, (this.kills.get(attacker) ?? 0) + 1);
     if (!attacker || !victim || attacker === victim) return out;
 
     const fetch = (name: string) => {
@@ -95,14 +90,13 @@ export class EncounterTracker {
   }
 
   private seen(name: string): Seen {
-    const s = this.stats.get(name) ?? { kills: 0, knocks: 0 };
-    const top = Math.max(0, ...[...this.stats.values()].map((x) => x.kills));
+    const kills = this.kills.get(name) ?? 0;
+    const top = Math.max(0, ...this.kills.values());
     return {
       name,
       uid: this.history.uidOf(this.matchId!, name),
-      kills: s.kills,
-      knocks: s.knocks,
-      killLeader: s.kills >= KILL_LEADER_MIN && s.kills === top,
+      kills,
+      killLeader: kills >= KILL_LEADER_MIN && kills === top,
     };
   }
 }
@@ -111,19 +105,24 @@ export class EncounterTracker {
 export function cardFor(seen: Seen, matchId: string, history: PlayerHistory): PlayerCard {
   const rec = seen.uid ? history.get(seen.uid) : undefined;
   const before = rec?.encounters.filter((e) => e.matchId !== matchId) ?? [];
+  const earlier = rec ? [...rec.fights].filter(([m]) => m !== matchId).map(([, f]) => f) : [];
+  const kills = earlier.reduce((n, f) => n + f.kills, 0);
+  const deaths = earlier.reduce((n, f) => n + f.deaths, 0);
   const latest = rec?.latest ?? null;
+  const metBefore = rec ? [...rec.lobbies].filter((m) => m !== matchId).length : 0;
   const peak = rec?.peak && latest && rankValue(rec.peak) > rankValue(latest) ? rec.peak : null;
   return {
     name: seen.name,
     anonymous: !seen.uid && isAnonymousName(seen.name),
     kills: seen.kills,
-    knocks: seen.knocks,
     killLeader: seen.killLeader,
     rank: latest ? { tier: latest.tier, div: latest.div, score: latest.score } : null,
     peak: peak ? { tier: peak.tier, div: peak.div, season: peak.season } : null,
     level: rec?.level ?? null,
     topPercent: rec?.topPercent ?? null,
-    metBefore: rec ? [...rec.lobbies].filter((m) => m !== matchId).length : 0,
+    metBefore,
+    // Same rule as the dashboard's K/D: kills when there were no deaths.
+    kd: metBefore ? kills / Math.max(deaths, 1) : null,
     theyKilledMe: before.filter((e) => e.kind === 'killed_me').length,
     iKilledThem: before.filter((e) => e.kind === 'i_killed').length,
   };
