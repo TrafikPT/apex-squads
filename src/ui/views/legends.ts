@@ -36,6 +36,17 @@ export function legendsView(ctx: ViewContext): ViewResult {
 
 function insights(rows: LegendRow[]): HTMLElement {
   const eligible = rows.filter((r) => r.games >= MIN_SAMPLE);
+  // "Best" needs something to compare: with one legend all four tiles would name it.
+  if (eligible.length < 2) {
+    const only = rows[0];
+    return el('div', { class: 'tile insight with-portrait legend-note' },
+      only ? legendBadge(only.legend) : el('span', { class: 'legend-badge random' }, '?'),
+      el('div', { class: 'insight-text' },
+        el('div', { class: 'label' }, only ? `${rows.length === 1 ? 'Only' : 'Mostly'} ${only.legend}` : 'No matches'),
+        el('div', { class: 'sub' }, only
+          ? `${only.games} of ${rows.reduce((n, r) => n + r.games, 0)} games · best legend by placement, RP and K/D shows once two legends have ${MIN_SAMPLE}+ games each`
+          : 'no matches for these filters')));
+  }
   const best = (value: (r: LegendRow) => number | null, better: 'high' | 'low') =>
     eligible
       .filter((r) => value(r) !== null)

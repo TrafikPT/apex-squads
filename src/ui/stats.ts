@@ -109,34 +109,99 @@ export function kpis(matches: MatchFact[]): Kpis {
   };
 }
 
-export interface RpPoint {
-  day: string; // YYYY-MM-DD (local)
-  delta: number;
-  cumulative: number;
-  /** RP after the day's last match with a known level; null when none had one. */
-  level: number | null;
-  matches: number;
+/** A break this long between two matches starts a new play session. */
+export const SESSION_GAP_MS = 2 * 60 * 60 * 1000;
+
+/** Play sessions, oldest first, each with its matches oldest first. */
+export function playSessions(matches: MatchFact[]): MatchFact[][] {
+  const sessions: MatchFact[][] = [];
+  let last = -Infinity;
+  for (const m of [...matches].sort((a, b) => a.startedAt.localeCompare(b.startedAt))) {
+    const t = Date.parse(m.startedAt);
+    if (t - last >= SESSION_GAP_MS) sessions.push([]);
+    sessions[sessions.length - 1].push(m);
+    last = t;
+  }
+  return sessions;
 }
 
-/** Net RP per play day, its running total and the RP level reached, oldest first. */
-export function rpByDay(matches: MatchFact[]): RpPoint[] {
-  const byDay = new Map<string, { delta: number; matches: number; level: number | null; at: string }>();
-  for (const m of matches) {
+export interface RpStep {
+  match: MatchFact;
+  /** RP after the match; null across several accounts (levels don't add up) or when unknown. */
+  level: number | null;
+  /** Net RP of the selection's matches up to this one. */
+  cumulative: number;
+  /**
+   * RP that changed between the account's previous recorded match and this
+   * one: games played while nothing was recording. 0 across several accounts.
+   */
+  unrecorded: number;
+  /** First match of a play session. */
+  sessionStart: boolean;
+}
+
+/**
+ * The selection's ranked matches, oldest first, with the RP level after each.
+ * "Unrecorded" compares with the account's previous match in all the data,
+ * not the selection, so a filter that hides matches doesn't count as missing.
+ */
+export function rpSteps(matches: MatchFact[], all: MatchFact[]): RpStep[] {
+  const single = rankedAccount(matches) !== null;
+  const previous = new Map<string, MatchFact>();
+  const lastOf = new Map<string, MatchFact>();
+  for (const m of [...all].sort((a, b) => a.startedAt.localeCompare(b.startedAt))) {
     if (m.rpDelta === null) continue;
-    const day = toLocalDay(new Date(m.startedAt));
-    const cur = byDay.get(day) ?? { delta: 0, matches: 0, level: null, at: '' };
-    cur.delta += m.rpDelta;
-    cur.matches += 1;
-    if (m.rpAfter !== null && m.startedAt > cur.at) {
-      cur.level = m.rpAfter;
-      cur.at = m.startedAt;
-    }
-    byDay.set(day, cur);
+    const prev = lastOf.get(m.accountKey);
+    if (prev) previous.set(m.matchId, prev);
+    lastOf.set(m.accountKey, m);
   }
+  const starts = new Set(playSessions(matches).map((s) => s[0].matchId));
+  const steps: RpStep[] = [];
   let cumulative = 0;
-  return [...byDay.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([day, v]) => ({ day, delta: v.delta, cumulative: (cumulative += v.delta), level: v.level, matches: v.matches }));
+  let level: number | null = null;
+  for (const m of [...matches].sort((a, b) => a.startedAt.localeCompare(b.startedAt))) {
+    if (m.rpDelta === null) continue;
+    cumulative += m.rpDelta;
+    let unrecorded = 0;
+    if (single) {
+      const known = m.rpAfter !== null && !m.rpEstimated;
+      const prev = previous.get(m.matchId);
+      if (known && prev?.rpAfter != null && !prev.rpEstimated) unrecorded = m.rpAfter! - m.rpDelta - prev.rpAfter;
+      level = known ? m.rpAfter : level === null ? null : level + m.rpDelta;
+    }
+    steps.push({ match: m, level: single ? level : null, cumulative, unrecorded, sessionStart: starts.has(m.matchId) });
+  }
+  return steps;
+}
+
+export interface SeasonBaseline {
+  season: number;
+  games: number;
+  kd: number;
+  avgKills: number;
+  avgDamage: number;
+  top5Rate: number;
+  winRate: number;
+}
+
+/**
+ * The current ranked season as the game counts it (every game, recorded or
+ * not), over these accounts: what the selection's numbers are compared with.
+ */
+export function seasonBaseline(data: Dataset, accountKeys: string[]): SeasonBaseline | null {
+  const rows = data.seasons.filter((s) => s.current && accountKeys.includes(s.accountKey));
+  const games = rows.reduce((n, s) => n + s.games, 0);
+  if (!games) return null;
+  const sum = (k: 'kills' | 'deaths' | 'damage' | 'top5s' | 'wins') => rows.reduce((n, s) => n + s[k], 0);
+  return {
+    season: Math.max(...rows.map((s) => s.season)),
+    games,
+    kd: sum('kills') / Math.max(sum('deaths'), 1),
+    avgKills: sum('kills') / games,
+    avgDamage: sum('damage') / games,
+    top5Rate: sum('top5s') / games,
+    winRate: sum('wins') / games,
+  };
 }
 
 /**
@@ -156,7 +221,8 @@ export function frequentTeammates(data: Dataset, matches: MatchFact[], limit: nu
     if (ids.has(t.matchId)) counts.set(t.playerKey, (counts.get(t.playerKey) ?? 0) + 1);
   }
   return [...counts.entries()]
-    .filter(([, games]) => games > 1)
+    // Regulars only (3+ games, as elsewhere): a random met twice isn't worth a chip.
+    .filter(([, games]) => games >= 3)
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
     .map(([playerKey, games]) => ({ playerKey, games }));
@@ -374,6 +440,41 @@ export function matchLoadout(m: Pick<MatchFact, 'loadout'>, guns: { weapon: stri
 
 /** My results per loadout in the selection, most played first; every loadout by default. */
 export function loadoutStats(data: Dataset, matches: MatchFact[], minGames = 1): LoadoutRow[] {
+  return [...loadoutGroups(data, matches)]
+    .filter(([, g]) => g.length >= minGames)
+    .map(([key, g]) => ({ weapons: key.split('|'), games: g.length, me: kpis(g) }))
+    .sort((a, b) => b.games - a.games);
+}
+
+export interface GunLoadoutRow {
+  weapon: string;
+  /** Games where this gun was one of my two. */
+  games: number;
+  me: Kpis;
+  /** The loadouts it was part of, most played first. */
+  pairings: LoadoutRow[];
+}
+
+/** Loadouts grouped by gun: 31 loadouts in 43 games is too thin to compare, a gun's games aren't. */
+export function gunLoadoutStats(data: Dataset, matches: MatchFact[]): GunLoadoutRow[] {
+  const groups = loadoutGroups(data, matches);
+  const byGun = new Map<string, { games: MatchFact[]; pairings: LoadoutRow[] }>();
+  for (const [key, g] of groups) {
+    const weapons = key.split('|');
+    for (const gun of weapons) {
+      let row = byGun.get(gun);
+      if (!row) byGun.set(gun, (row = { games: [], pairings: [] }));
+      row.games.push(...g);
+      row.pairings.push({ weapons, games: g.length, me: kpis(g) });
+    }
+  }
+  return [...byGun]
+    .map(([weapon, r]) => ({ weapon, games: r.games.length, me: kpis(r.games), pairings: r.pairings.sort((a, b) => b.games - a.games) }))
+    .sort((a, b) => b.games - a.games);
+}
+
+/** My matches per loadout ("R-301|EVA-8"); matches without a loadout are left out. */
+function loadoutGroups(data: Dataset, matches: MatchFact[]): Map<string, MatchFact[]> {
   const ids = new Set(matches.map((m) => m.matchId));
   const gunsByMatch = new Map<string, { weapon: string; damage: number }[]>();
   for (const w of data.weapons) {
@@ -391,10 +492,7 @@ export function loadoutStats(data: Dataset, matches: MatchFact[], minGames = 1):
     if (!g) groups.set(key, (g = []));
     g.push(m);
   }
-  return [...groups]
-    .filter(([, g]) => g.length >= minGames)
-    .map(([key, g]) => ({ weapons: key.split('|'), games: g.length, me: kpis(g) }))
-    .sort((a, b) => b.games - a.games);
+  return groups;
 }
 
 // ---------------------------------------------------------------- comps

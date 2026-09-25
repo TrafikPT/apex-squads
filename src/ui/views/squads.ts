@@ -210,7 +210,8 @@ function compsCard(ctx: ViewContext, comps: CompRow[], baseline: Kpis): HTMLElem
   const body = el('tbody', {});
   for (const c of sortRows(comps, COMP_COLUMNS, compSort)) {
     const row = el('tr', {},
-      el('td', {}, el('div', { class: 'who' }, compFaces(c.legends), el('span', { class: 'comp-names' }, c.legends.join(' · ')))),
+      // Faces only: players know the legends by sight, and each face names its legend on hover.
+      el('td', {}, el('div', { class: 'who' }, compFaces(c.legends))),
       el('td', { class: 'num' }, String(c.games)),
       el('td', { class: 'num' }, place(c.me.avgPlacement)),
       vsAverage(baseline, c.me),

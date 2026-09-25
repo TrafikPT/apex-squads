@@ -20,9 +20,9 @@ export function openMatch(matchId: string): void {
   revealExpanded = true;
 }
 
-const COLUMNS = 9;
-/** Chevron, legend, time and squad: the day's name spans these. */
-const LEAD_COLUMNS = 4;
+const COLUMNS = 10;
+/** Chevron, legend, time, map and squad: the day's name spans these. */
+const LEAD_COLUMNS = 5;
 /** Matches rendered per "Show more" step; whole days are always shown. */
 const PAGE_SIZE = 100;
 let shown = PAGE_SIZE;
@@ -39,6 +39,7 @@ export function matchesView(ctx: ViewContext): ViewResult {
   }
 
   const mates = groupBy(ctx.data.teammates, (t) => t.matchId);
+  const byTogether = squadOrder(ctx);
   const guns = groupBy(ctx.data.weapons, (w) => w.matchId);
   const accountName = new Map(ctx.data.accounts.map((a) => [a.accountKey, a.name]));
 
@@ -79,18 +80,19 @@ export function matchesView(ctx: ViewContext): ViewResult {
     if (!isOpen) continue;
     for (const m of day.matches) {
       const open = expanded === m.matchId;
-      const row = matchRow(ctx, m, open);
+      const row = matchRow(ctx, m, open, byTogether);
       body.append(row);
       if (open) {
         expandedRow = row;
         body.append(el('tr', { class: 'detail-row' }, el('td', { colspan: String(COLUMNS) },
-          matchDetail(ctx, m, mates.get(m.matchId) ?? [], guns.get(m.matchId) ?? [], accountName.get(m.accountKey) ?? m.accountKey))));
+          matchDetail(ctx, m, [...(mates.get(m.matchId) ?? [])].sort((a, b) => byTogether(a.playerKey, b.playerKey)),
+            guns.get(m.matchId) ?? [], accountName.get(m.accountKey) ?? m.accountKey))));
       }
     }
   }
 
   const head = el('tr', {});
-  for (const [label, num] of [['', false], ['Legend', false], ['Time', false], ['Squad', false], ['Place', true],
+  for (const [label, num] of [['', false], ['Legend', false], ['Time', false], ['Map', false], ['Squad', false], ['Place', true],
     ['K/D', true], ['K / D / A / Kn', true], ['Damage', true], ['RP', true]] as const) {
     head.append(el('th', { class: num ? 'num' : '' }, label));
   }
@@ -142,9 +144,9 @@ function onActivate(row: HTMLElement, action: () => void): void {
   });
 }
 
-function matchRow(ctx: ViewContext, m: MatchFact, open: boolean): HTMLElement {
+function matchRow(ctx: ViewContext, m: MatchFact, open: boolean, byTogether: (a: string, b: string) => number): HTMLElement {
   const squad = el('td', {});
-  [...(ctx.squadOf.get(m.matchId) ?? [])].forEach((p, i) => {
+  [...(ctx.squadOf.get(m.matchId) ?? [])].sort(byTogether).forEach((p, i) => {
     if (i) squad.append(', ');
     squad.append(el('span', { class: ctx.regulars.has(p) ? 'squad-friend' : 'squad-random' }, ctx.playerName(p)));
   });
@@ -153,6 +155,7 @@ function matchRow(ctx: ViewContext, m: MatchFact, open: boolean): HTMLElement {
     el('td', { class: 'chevron-col' }, chevronIcon()),
     el('td', { class: 'legend-col' }, legendBadge(m.legend)),
     el('td', {}, new Date(m.startedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })),
+    el('td', { class: 'map-col' }, m.map),
     squad,
     el('td', { class: 'num' }, el('span', { class: `place${m.placement === 1 ? ' win' : ''}` }, `#${m.placement}`)),
     // Same rule as the K/D elsewhere: kills when there were no deaths.
@@ -192,9 +195,8 @@ function matchDetail(ctx: ViewContext, m: MatchFact, mates: TeammateFact[], guns
     el('div', { class: 'stat-grid' },
       stat('Kills', String(m.kills)), stat('Assists', String(m.assists)), stat('Knocks', String(m.knocks)),
       stat('Deaths', String(m.deaths)), stat('Damage', fmtInt(m.damage)),
-      stat('Revives', `${m.revivesGiven} · ${m.revivesReceived}`),
+      stat('Revives', String(m.revivesGiven)), stat('Picked up', String(m.revivesReceived)),
     ),
-    el('div', { class: 'footnote' }, 'Revives: given · received'),
   );
 
   const squadList = el('div', { class: 'squad-list' },
@@ -232,6 +234,16 @@ function section(title: string, ...children: (HTMLElement | string)[]): HTMLElem
 }
 
 // ---------------------------------------------------------------- helpers
+
+/**
+ * Orders a squad's teammates the same way every time: most games together
+ * first (friends before randoms), then by name. Lobby order changes per match.
+ */
+function squadOrder(ctx: ViewContext): (a: string, b: string) => number {
+  const together = new Map<string, number>();
+  for (const t of ctx.data.teammates) together.set(t.playerKey, (together.get(t.playerKey) ?? 0) + 1);
+  return (a, b) => (together.get(b) ?? 0) - (together.get(a) ?? 0) || ctx.playerName(a).localeCompare(ctx.playerName(b));
+}
 
 /** Short, like the weapon rows next to it, so it fits beside a long name. */
 function memberStats(kills: number, deaths: number, knocks: number): string {

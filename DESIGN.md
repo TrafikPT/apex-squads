@@ -657,9 +657,9 @@ name and GEP players by platform ID; they are linked with "merge players".
 The dashboard has to stay focused, so a feature that adds nothing is easy to
 remove:
 - **One feature = one module.** A tab is one entry in `NAV` and one view
-  file; an Overview card is one entry in `INSIGHT_CARDS`
-  (`src/ui/views/overview.ts`) and one function. Removing a feature is
-  deleting a line and a function.
+  file; an Overview card is one function in `src/ui/views/overview.ts` and
+  one line in `overviewView()`. Removing a feature is deleting a line and a
+  function.
 - **Conditional cards.** An insight card returns null when it has nothing to
   say, and then takes no space.
 - **Show sample size.** Every rate or average shows its *n*. Rows under
@@ -709,10 +709,10 @@ Overwolf's overlay replaces it once the app is approved.
 ### Planned
 | Where | Feature |
 |---|---|
-| Overview | ~~RP chart with ranks~~ **done**: for one account it plots the RP level against the division thresholds (labelled bands); across accounts it plots the net RP total, since levels can't be added up. Recent matches were removed from Overview (the Matches tab has them) to give the chart the height |
+| Overview | ~~Redesign~~ **done (2026-09-25)**: the first screen answers where I stand, how the last session went and whether I'm getting better. **Your rank** (badge, RP, progress to the next division, season peak and games; from the game's season stats, so it shows before any match is recorded, and ignores the filters). **Last session** (a 2-hour break starts a new one: matches, net RP, wins, best and worst game). **RP, match by match** on the rank bands (one account) or as a running total (several), sessions marked, RP from games not recorded shown as a dashed step and in the title (it explained a −50 net against a rising line). **Recent matches** (last 5). **Six tiles against the season** as the game counts it (ranked only; "≈" within 3%) |
 | Overview | "Games to next rank" at the current RP per game (one account only) |
-| Overview | ~~Best / worst game~~ **done**: within the filter selection (not a fixed week), shown from 5 matches. Ranked by RP when every match has it, else placement → kills → damage |
-| Matches | Group by play session (a gap of N hours, not the calendar day, so late nights stay together), with net RP per session |
+| Matches | Group by play session (`playSessions`, 2-hour break; the Overview uses it already) instead of the calendar day, so late nights stay together, with net RP per session. Done meanwhile: a Map column, squad names in a fixed order (most games together first), revives split into Revives / Picked up |
+| Weapons | ~~Loadouts by gun~~ **done (2026-09-25)**: 31 loadouts in 43 games were too thin to compare, so the Loadouts table has one row per gun (every game it was one of my two) and opens to its pairings |
 | Squads | Support stats: knocked squadmates revived vs lost, how often I get picked up, how many knocks become kills (mine or the squad's) |
 | Weapons | Personal tier list: kills per match with the gun and damage share, normalised for games played. Not win rate: guns held late in a match correlate with surviving |
 | Sharing | Recap PNG for a session or week. Friends' names shown, randoms masked |

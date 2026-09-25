@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Dataset, MatchFact } from '../src/ui/facts';
 import { generateMockData } from '../src/ui/mock-data';
-import { compStats, DEFAULT_FILTERS, filterMatches, groupByDay, kpis, legendStats, loadoutStats, matchLoadout, rankedAccount, rankGames, regularPlayers, rpByDay, squadStats, teammateStats, weaponStats } from '../src/ui/stats';
+import { compStats, DEFAULT_FILTERS, filterMatches, groupByDay, gunLoadoutStats, kpis, legendStats, loadoutStats, matchLoadout, playSessions, rankedAccount, rankGames, regularPlayers, rpSteps, seasonBaseline, squadStats, teammateStats, weaponStats } from '../src/ui/stats';
 import { niceTicks } from '../src/ui/format';
 import { divisionFloors, rankName, rankOf } from '../src/ui/ranks';
 import { weaponClass } from '../src/ui/weapons';
@@ -99,17 +99,51 @@ test('kpis of an empty selection are empty, not zero', () => {
   assert.equal(k.rpNet, null);
 });
 
-test('rpByDay sums per local day and keeps a running total', () => {
-  const pts = rpByDay([
-    match('1', new Date(2026, 8, 21, 22), { rpDelta: 40 }),
-    match('2', new Date(2026, 8, 20, 21), { rpDelta: -20 }),
-    match('3', new Date(2026, 8, 21, 23), { rpDelta: 10 }),
-    match('4', new Date(2026, 8, 21, 23), { rpDelta: null, mode: 'pubs' }),
+test('play sessions split at a 2-hour break, oldest first', () => {
+  const sessions = playSessions([
+    match('late', new Date(2026, 8, 21, 23, 30)),
+    match('first', new Date(2026, 8, 21, 20)),
+    match('second', new Date(2026, 8, 21, 21, 59)), // 1 h 59 after the first: same session
+    match('next', new Date(2026, 8, 22, 18)),
   ]);
-  assert.deepEqual(pts, [
-    { day: '2026-09-20', delta: -20, cumulative: -20, level: null, matches: 1 },
-    { day: '2026-09-21', delta: 50, cumulative: 30, level: null, matches: 2 },
+  assert.deepEqual(sessions.map((s) => s.map((m) => m.matchId)), [['first', 'second', 'late'], ['next']]);
+});
+
+test('rpSteps: RP after each ranked match, with RP from unrecorded games before it', () => {
+  const all = [
+    match('a', new Date(2026, 8, 20, 19), { rpDelta: -40, rpAfter: 8_560 }),
+    match('pubs', new Date(2026, 8, 20, 19, 30), { mode: 'pubs', rpDelta: null }),
+    match('b', new Date(2026, 8, 20, 20), { rpDelta: 20, rpAfter: 8_580 }),
+    // 7 games nobody recorded took it to 8,638 before this one.
+    match('c', new Date(2026, 8, 21, 20), { rpDelta: -24, rpAfter: 8_614 }),
+    match('d', new Date(2026, 8, 21, 20, 20), { rpDelta: 30, rpAfter: null, rpEstimated: true }),
+  ];
+  const steps = rpSteps(all, all);
+  assert.deepEqual(steps.map((s) => [s.match.matchId, s.level, s.cumulative, s.unrecorded, s.sessionStart]), [
+    ['a', 8_560, -40, 0, true], ['b', 8_580, -20, 0, false], ['c', 8_614, -44, 58, true], ['d', 8_644, -14, 0, false],
   ]);
+  // A filter that hides b isn't a gap: b was recorded.
+  const filtered = rpSteps(all.filter((m) => m.matchId !== 'b'), all);
+  assert.deepEqual(filtered.map((s) => s.unrecorded), [0, 58, 0]);
+});
+
+test('rpSteps: across accounts only the running total, no levels or gaps', () => {
+  const t = new Date(2026, 8, 20, 19);
+  const steps = rpSteps([match('a', t, { rpAfter: 8_000 }), match('b', t, { accountKey: 'a2', rpAfter: 3_000 })],
+    [match('a', t), match('b', t, { accountKey: 'a2' })]);
+  assert.deepEqual(steps.map((s) => [s.level, s.cumulative, s.unrecorded]), [[null, 10, 0], [null, 20, 0]]);
+});
+
+test('seasonBaseline: the current season over the chosen accounts', () => {
+  const season = (accountKey: string, current: boolean, games: number, kills: number) => ({
+    accountKey, season: current ? 30 : 29, current, games, wins: 1, top5s: games / 4, kills, deaths: games, assists: 0, knocks: 0,
+    damage: games * 800, mostKills: 0, mostDamage: 0, revived: 0, respawned: 0, rp: 8_000, peakRp: null,
+  });
+  const data = { ...dataset([]), seasons: [season('a1', true, 100, 120), season('a1', false, 300, 999), season('a2', true, 100, 80)] };
+  const both = seasonBaseline(data, ['a1', 'a2'])!;
+  assert.deepEqual([both.games, both.kd, both.avgDamage, both.top5Rate], [200, 1, 800, 0.25]);
+  assert.equal(seasonBaseline(data, ['a1'])!.kd, 1.2);
+  assert.equal(seasonBaseline(data, ['nobody']), null);
 });
 
 test('mock data is deterministic and internally consistent', () => {
@@ -251,6 +285,21 @@ test('loadoutStats groups matches by loadout with my numbers', () => {
   assert.equal(rows[0].me.kd, 3);
 });
 
+test('gunLoadoutStats: every game a gun was in the loadout, with the loadouts it was part of', () => {
+  const d = new Date(2026, 8, 20);
+  const data = dataset([match('1', d, { kills: 4 }), match('2', d, { kills: 2 }), match('3', d, { kills: 0 })]);
+  data.weapons = [
+    { matchId: '1', weapon: 'R-301', kills: 3, knocks: 3, damage: 700 },
+    { matchId: '1', weapon: 'EVA-8', kills: 1, knocks: 1, damage: 300 },
+    { matchId: '2', weapon: 'R-301', kills: 2, knocks: 2, damage: 500 },
+    { matchId: '2', weapon: 'Mastiff', kills: 0, knocks: 0, damage: 100 },
+    { matchId: '3', weapon: 'EVA-8', kills: 0, knocks: 0, damage: 200 },
+  ];
+  const guns = gunLoadoutStats(data, data.matches);
+  assert.deepEqual(guns.map((g) => [g.weapon, g.games, g.me.avgKills]), [['R-301', 2, 3], ['EVA-8', 2, 2], ['Mastiff', 1, 2]]);
+  assert.deepEqual(guns[0].pairings.map((p) => p.weapons.join('+')), ['R-301+EVA-8', 'R-301+Mastiff']);
+});
+
 test('compStats: full premades only, legends as a set, team kills and K/D', () => {
   const d = new Date(2026, 8, 20);
   const data = dataset(
@@ -295,15 +344,6 @@ test('niceTicks: whole numbers without duplicates or -0, even for tiny ranges', 
   assert.ok(!Object.is(niceTicks(-2, 0, 4)[2], -0));
   assert.deepEqual(niceTicks(0, 1, 4), [0, 1]);
   assert.deepEqual(niceTicks(-1000, 3000, 4), [-1000, 0, 1000, 2000, 3000]);
-});
-
-test('rpByDay: the level is the RP after the day\'s last match', () => {
-  const points = rpByDay([
-    match('late', new Date(2026, 8, 20, 23), { rpDelta: -20, rpAfter: 6_080 }),
-    match('early', new Date(2026, 8, 20, 19), { rpDelta: 100, rpAfter: 6_100 }),
-    match('unknown', new Date(2026, 8, 21, 19), { rpDelta: 30, rpAfter: null }),
-  ]);
-  assert.deepEqual(points.map((p) => [p.day, p.cumulative, p.level]), [['2026-09-20', 80, 6_080], ['2026-09-21', 110, null]]);
 });
 
 test('rankedAccount: only when every ranked match is on one account', () => {

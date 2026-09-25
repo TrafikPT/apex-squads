@@ -1,9 +1,9 @@
 import { el } from '../dom';
 import { fixed, fmtInt, pct } from '../format';
-import { kpis, Kpis, loadoutStats, LoadoutRow, weaponStats, WeaponRow } from '../stats';
+import { GunLoadoutRow, gunLoadoutStats, kpis, Kpis, loadoutStats, LoadoutRow, weaponStats, WeaponRow } from '../stats';
 import { OTHER_WEAPON, WEAPON_CLASSES, WeaponClass, weaponClass, weaponLabel } from '../weapons';
 import type { ViewContext, ViewResult } from './context';
-import { damageText, MIN_SAMPLE, rpCell, rpPerMatch, SortColumn, sortableHead, sortRows, SortState,
+import { clickable, damageText, MIN_SAMPLE, rpCell, rpPerMatch, SortColumn, sortableHead, sortRows, SortState,
   vsAverage } from './shared';
 
 /**
@@ -35,8 +35,11 @@ const COLUMNS: SortColumn<WeaponRow>[] = [
   { label: 'Share of damage', value: (r) => r.damageShare, better: 'high' },
 ];
 
-const LOADOUT_COLUMNS: SortColumn<LoadoutRow>[] = [
-  { label: 'Loadout' },
+/** A group of games and how they went: a gun's, or one of its pairings'. */
+type Outcome = { games: number; me: Kpis };
+
+const LOADOUT_COLUMNS: SortColumn<Outcome>[] = [
+  { label: 'Gun' },
   { label: 'Games', value: (r) => r.games, better: 'high' },
   { label: 'Avg place', value: (r) => r.me.avgPlacement, better: 'low' },
   { label: 'vs avg', value: (r) => r.me.avgPlacement, better: 'low' },
@@ -51,6 +54,8 @@ const LOADOUT_COLUMNS: SortColumn<LoadoutRow>[] = [
 let tableMode: 'loadouts' | 'weapons' = 'loadouts';
 let sort: SortState = { column: 5, direction: 'desc' };
 let loadoutSort: SortState = { column: 1, direction: 'desc' };
+/** Guns whose pairings are shown under them; ?gun=R-301 opens one (dev aid for screenshots). */
+const openGuns = new Set<string>(new URLSearchParams(location.search).getAll('gun'));
 
 export function weaponsView(ctx: ViewContext): ViewResult {
   const rows = weaponStats(ctx.data, ctx.matches);
@@ -59,7 +64,7 @@ export function weaponsView(ctx: ViewContext): ViewResult {
     node: el('div', { class: 'view view-weapons' },
       insights(rows, loadouts),
       typeCard(rows),
-      tableMode === 'loadouts' ? loadoutsCard(ctx, loadouts, kpis(ctx.matches)) : weaponsCard(ctx, rows),
+      tableMode === 'loadouts' ? loadoutsCard(ctx, gunLoadoutStats(ctx.data, ctx.matches), kpis(ctx.matches)) : weaponsCard(ctx, rows),
     ),
   };
 }
@@ -198,10 +203,10 @@ function weaponsCard(ctx: ViewContext, rows: WeaponRow[]): HTMLElement {
 
 // ---------------------------------------------------------------- loadouts table
 
-function loadoutsCard(ctx: ViewContext, loadouts: LoadoutRow[], baseline: Kpis): HTMLElement {
+function loadoutsCard(ctx: ViewContext, guns: GunLoadoutRow[], baseline: Kpis): HTMLElement {
   const card = el('section', { class: 'card table-card' },
-    tableTitle(ctx, 'loadout = the two guns you held longest in the match'));
-  if (!loadouts.length) {
+    tableTitle(ctx, 'your games with each gun in your loadout (the two you held longest) · click a gun for its pairings'));
+  if (!guns.length) {
     card.append(el('div', { class: 'empty' }, 'No loadouts in this selection'));
     return card;
   }
@@ -209,26 +214,42 @@ function loadoutsCard(ctx: ViewContext, loadouts: LoadoutRow[], baseline: Kpis):
     loadoutSort = next;
     ctx.setView('weapons');
   });
+  const cells = (o: Outcome) => [
+    el('td', { class: 'num' }, fmtInt(o.games)),
+    el('td', { class: 'num' }, o.me.avgPlacement === null ? '–' : `#${o.me.avgPlacement.toFixed(1)}`),
+    vsAverage(baseline, o.me),
+    el('td', { class: 'num' }, pct(o.me.winRate)),
+    el('td', { class: 'num' }, fixed(o.me.kd, 2)),
+    el('td', { class: 'num' }, fixed(o.me.avgKills, 2)),
+    el('td', { class: 'num' }, damageText(o.me)),
+    rpCell(rpPerMatch(o.me)),
+  ];
   const body = el('tbody', {});
-  for (const l of sortRows(loadouts, LOADOUT_COLUMNS, loadoutSort)) {
-    const guns = el('div', { class: 'loadout-cell' });
-    l.weapons.forEach((w, i) => {
-      if (i) guns.append(el('span', { class: 'plus' }, '+'));
-      guns.append(el('span', { class: 'gun' }, el('span', { class: 'swatch', style: `background: ${CLASS_COLOR[weaponClass(w)]}` }),
-        el('span', { class: 'weapon-name' }, w)));
-    });
-    const row = el('tr', {},
-      el('td', {}, guns),
-      el('td', { class: 'num' }, fmtInt(l.games)),
-      el('td', { class: 'num' }, l.me.avgPlacement === null ? '–' : `#${l.me.avgPlacement.toFixed(1)}`),
-      vsAverage(baseline, l.me),
-      el('td', { class: 'num' }, pct(l.me.winRate)),
-      el('td', { class: 'num' }, fixed(l.me.kd, 2)),
-      el('td', { class: 'num' }, fixed(l.me.avgKills, 2)),
-      el('td', { class: 'num' }, damageText(l.me)),
-      rpCell(rpPerMatch(l.me)),
+  for (const g of sortRows(guns, LOADOUT_COLUMNS, loadoutSort) as GunLoadoutRow[]) {
+    const open = openGuns.has(g.weapon);
+    const row = el('tr', { class: `gun-row${open ? ' open' : ''}`, 'aria-expanded': String(open) },
+      el('td', {}, el('div', { class: 'loadout-cell' },
+        el('span', { class: 'gun' }, el('span', { class: 'swatch', style: `background: ${CLASS_COLOR[weaponClass(g.weapon)]}` }),
+          el('span', { class: 'weapon-name' }, g.weapon)),
+        el('span', { class: 'pairings' }, `${g.pairings.length} ${g.pairings.length === 1 ? 'loadout' : 'loadouts'}`))),
+      ...cells(g),
     );
+    clickable(row, open ? 'Hide its pairings' : 'Show the loadouts it was in', () => {
+      if (open) openGuns.delete(g.weapon);
+      else openGuns.add(g.weapon);
+      ctx.setView('weapons');
+    });
     body.append(row);
+    if (!open) continue;
+    for (const p of g.pairings) {
+      const partner = p.weapons.find((w) => w !== g.weapon);
+      body.append(el('tr', { class: 'pairing-row' },
+        el('td', {}, el('div', { class: 'loadout-cell' }, el('span', { class: 'plus' }, '+'),
+          partner ? el('span', { class: 'gun' }, el('span', { class: 'swatch', style: `background: ${CLASS_COLOR[weaponClass(partner)]}` }),
+            el('span', { class: 'weapon-name' }, partner)) : el('span', { class: 'muted' }, 'on its own'))),
+        ...cells(p),
+      ));
+    }
   }
   card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)));
   return card;
