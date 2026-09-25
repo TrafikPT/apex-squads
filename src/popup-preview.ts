@@ -11,7 +11,7 @@ import { app } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { PlayerHistory } from './player-history';
-import { PopupService } from './popup-service';
+import { describePopup, PopupService } from './popup-service';
 import { PopupWindow } from './popup-window';
 import { readRecordings } from './recordings';
 import type { Popup } from './ui/popup-card';
@@ -38,14 +38,6 @@ async function collect(): Promise<Map<string, Popup[]>> {
   return byMatch;
 }
 
-function describe(p: Popup): string {
-  if (p.moment === 'lobby') return `Lobby: ${p.players.map((c) => `${c.name} (killed you ${c.theyKilledMe}×, K/D ${c.kd?.toFixed(2)})`).join(', ')}`;
-  const c = p.player;
-  const fight = p.moment === 'killed_by' ? ` with ${c.weapon ?? '?'}, you hit them for ${c.damageFromMe}` : '';
-  return `${p.moment === 'killed_by' ? 'Killed by' : 'You killed'} ${c.name}${fight}: ${c.kills} kills${c.killLeader ? ', kill leader' : ''}` +
-    (c.kd !== null ? `, K/D ${c.kd.toFixed(2)} over ${c.metBefore} matches` : '');
-}
-
 async function main(): Promise<void> {
   const byMatch = await collect();
   const target = process.env.APEX_REPLAY_MATCH || [...byMatch.keys()].at(-1);
@@ -61,7 +53,7 @@ async function main(): Promise<void> {
   if (shots) fs.mkdirSync(shots, { recursive: true });
   const window = new PopupWindow();
   for (const [i, p] of popups.entries()) {
-    console.log(`${p.at.slice(11, 19)} ${describe(p)}`);
+    console.log(`${p.at.slice(11, 19)} ${describePopup(p)}`);
     window.show(p);
     await new Promise((resolve) => setTimeout(resolve, shots ? 800 : GAP_MS));
     if (shots) {

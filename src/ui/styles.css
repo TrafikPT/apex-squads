@@ -150,6 +150,8 @@ select, input[type="date"] {
 .tile .value { font: 700 30px/1.1 var(--font-display); margin-top: 4px; }
 .good { color: var(--good); }
 .bad { color: var(--bad); }
+/* RP from the formula, until the real value arrives (rp-formula.ts). */
+.estimate { font-style: italic; opacity: 0.8; }
 
 /* ---------------------------------------------------------- chart */
 .rp-card { display: flex; flex-direction: column; min-height: 0; }
@@ -218,15 +220,13 @@ tr.clickable:focus-visible { outline: 1px solid var(--accent); outline-offset: -
 .insight .sub { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
 .tile.clickable { cursor: pointer; }
 .tile.clickable:hover, .tile.clickable:focus-visible { border-color: var(--accent); }
-/* Too few games to judge (MIN_SAMPLE): numbers step back, names stay readable. */
-.tile.low-sample .value, tr.low-sample td.num, tr.low-sample td.num * { color: var(--text-muted); }
-tr.low-sample .bar { opacity: 0.4; }
 .squads-grid { display: grid; grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; min-height: 0; }
 
 /* ---------------------------------------------------------- matches */
 .chevron-col { width: 1%; padding-right: 0; }
 .chevron { width: 16px; height: 16px; stroke: var(--text-muted); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform 120ms; display: block; }
 .match-row.open .chevron { transform: rotate(90deg); stroke: var(--accent); }
+.day-row.open .chevron { transform: rotate(90deg); }
 .match-row.open td { background: var(--surface-2); border-bottom-color: transparent; }
 .day-row td {
   padding: 14px 8px 6px; border-bottom: 1px solid var(--grid); background: var(--surface);

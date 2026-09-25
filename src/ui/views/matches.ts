@@ -4,14 +4,20 @@ import { fixed, fmtDateTime, fmtInt, place, signed } from '../format';
 import { legendBadge } from '../portraits';
 import { groupByDay, toLocalDay } from '../stats';
 import type { ViewContext, ViewResult } from './context';
-import { rpCell } from './shared';
+import { ESTIMATE_TITLE, rpCell, rpText } from './shared';
 
 /** The one expanded match; kept across re-renders and set from other views. */
 let expanded: string | null = null;
 
+/** Days whose matches are hidden (local YYYY-MM-DD); kept across re-renders. */
+const collapsed = new Set<string>();
+/** Set by openMatch: the match's day opens even if it was collapsed. */
+let revealExpanded = false;
+
 /** Opens a match's details the next time the Matches view renders. */
 export function openMatch(matchId: string): void {
   expanded = matchId;
+  revealExpanded = true;
 }
 
 const COLUMNS = 9;
@@ -43,6 +49,11 @@ export function matchesView(ctx: ViewContext): ViewResult {
   }
   const openAt = days.flatMap((d) => d.matches).findIndex((m) => m.matchId === expanded);
   const limit = Math.max(shown, openAt + 1);
+  if (revealExpanded) {
+    revealExpanded = false;
+    const day = days.find((d) => d.matches.some((m) => m.matchId === expanded));
+    if (day) collapsed.delete(day.day);
+  }
 
   const body = el('tbody', {});
   let expandedRow: HTMLElement | null = null;
@@ -52,9 +63,10 @@ export function matchesView(ctx: ViewContext): ViewResult {
     rendered += day.matches.length;
     // The day's averages sit under the columns they summarize; RP is the day's net.
     const s = day.summary;
+    const isOpen = !collapsed.has(day.day);
     const dayStat = (text: string, title: string, cls = '') => el('td', { class: `num day-stat ${cls}`, title }, text);
-    body.append(el('tr', { class: 'day-row' },
-      el('td', { colspan: String(LEAD_COLUMNS) },
+    body.append(dayRow(ctx, day.day, isOpen,
+      el('td', { colspan: String(LEAD_COLUMNS - 1) },
         el('span', { class: 'day-name' }, fmtLongDay(day.day)),
         el('span', { class: 'day-sum' }, `${s.matches} ${s.matches === 1 ? 'match' : 'matches'} · day averages`)),
       dayStat(place(s.avgPlacement), 'Average placement'),
@@ -64,6 +76,7 @@ export function matchesView(ctx: ViewContext): ViewResult {
       s.rpNet === null ? dayStat('–', 'No RP data for this day')
         : dayStat(`${signed(s.rpNet)} RP`, 'Net RP for the day', s.rpNet >= 0 ? 'good' : 'bad'),
     ));
+    if (!isOpen) continue;
     for (const m of day.matches) {
       const open = expanded === m.matchId;
       const row = matchRow(ctx, m, open);
@@ -99,9 +112,37 @@ export function matchesView(ctx: ViewContext): ViewResult {
   };
 }
 
-function matchRow(ctx: ViewContext, m: MatchFact, open: boolean): HTMLElement {
+/** A day's header row; click or Enter collapses or opens the day's matches. */
+function dayRow(ctx: ViewContext, day: string, open: boolean, ...cells: HTMLElement[]): HTMLElement {
+  const row = el('tr', { class: `day-row clickable${open ? ' open' : ''}`, tabindex: '0', 'aria-expanded': String(open),
+    title: open ? 'Collapse this day' : 'Show this day' },
+    el('td', { class: 'chevron-col' }, chevronIcon()), ...cells);
+  onActivate(row, () => {
+    if (open) collapsed.add(day);
+    else collapsed.delete(day);
+    ctx.setView('matches');
+  });
+  return row;
+}
+
+function chevronIcon(): SVGElement {
   const chevron = svgEl('svg', { class: 'chevron', viewBox: '0 0 24 24' });
   chevron.append(svgEl('path', { d: 'M9 6l6 6-6 6' }));
+  return chevron;
+}
+
+/** Click, Enter or Space. */
+function onActivate(row: HTMLElement, action: () => void): void {
+  row.addEventListener('click', action);
+  row.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      action();
+    }
+  });
+}
+
+function matchRow(ctx: ViewContext, m: MatchFact, open: boolean): HTMLElement {
   const squad = el('td', {});
   [...(ctx.squadOf.get(m.matchId) ?? [])].forEach((p, i) => {
     if (i) squad.append(', ');
@@ -109,7 +150,7 @@ function matchRow(ctx: ViewContext, m: MatchFact, open: boolean): HTMLElement {
   });
   const row = el('tr', { class: `match-row clickable${open ? ' open' : ''}`, tabindex: '0', 'aria-expanded': String(open),
     title: open ? 'Hide details' : 'Show details' },
-    el('td', { class: 'chevron-col' }, chevron),
+    el('td', { class: 'chevron-col' }, chevronIcon()),
     el('td', { class: 'legend-col' }, legendBadge(m.legend)),
     el('td', {}, new Date(m.startedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })),
     squad,
@@ -118,18 +159,11 @@ function matchRow(ctx: ViewContext, m: MatchFact, open: boolean): HTMLElement {
     el('td', { class: 'num' }, (m.kills / Math.max(m.deaths, 1)).toFixed(2)),
     el('td', { class: 'num' }, `${m.kills} / ${m.deaths} / ${m.assists} / ${m.knocks}`),
     el('td', { class: 'num' }, fmtInt(m.damage)),
-    rpCell(m.rpDelta),
+    rpCell(m.rpDelta, m.rpEstimated),
   );
-  const toggle = () => {
+  onActivate(row, () => {
     expanded = open ? null : m.matchId;
     ctx.setView('matches');
-  };
-  row.addEventListener('click', toggle);
-  row.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      toggle();
-    }
   });
   return row;
 }
@@ -147,8 +181,8 @@ function matchDetail(ctx: ViewContext, m: MatchFact, mates: TeammateFact[], guns
     el('div', { class: 'detail-result' },
       el('div', {}, el('div', { class: `detail-place${m.placement === 1 ? ' win' : ''}` }, `#${m.placement}`),
         el('div', { class: 'detail-meta' }, `of ${m.teams} squads`)),
-      m.rpDelta === null ? '' : el('div', {}, el('div', { class: `detail-rp ${m.rpDelta >= 0 ? 'good' : 'bad'}` }, signed(m.rpDelta)),
-        el('div', { class: 'detail-meta' }, 'RP')),
+      m.rpDelta === null ? '' : el('div', {}, el('div', { class: `detail-rp ${m.rpDelta >= 0 ? 'good' : 'bad'}` }, rpText(m.rpDelta, m.rpEstimated)),
+        el('div', { class: 'detail-meta', ...(m.rpEstimated ? { title: ESTIMATE_TITLE } : {}) }, m.rpEstimated ? 'RP (estimate)' : 'RP')),
     ),
   );
 

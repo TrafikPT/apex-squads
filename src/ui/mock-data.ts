@@ -194,6 +194,8 @@ export function generateMockData(now = new Date(), seed = 7): Dataset {
         revivesReceived: poisson(0.4),
         rpDelta,
         rpAfter,
+        rpEstimated: false,
+        loadout: [],
         squadKey: mates.map((m) => m.playerKey).sort().join('|'),
       });
     }

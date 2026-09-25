@@ -57,10 +57,16 @@ test('real: RP change per match comes from the season stats snapshots', () => {
   assert.equal(first.rpDelta, 85);
   assert.equal(first.rpAfter, 8766);
   // Within a day, each match starts from where the previous one ended.
-  const rated = d.matches.filter((m) => m.rpDelta !== null && m.startedAt.startsWith('2026-09-24'));
+  const rated = d.matches.filter((m) => m.rpDelta !== null && !m.rpEstimated && m.startedAt.startsWith('2026-09-24'));
   for (let i = 1; i < rated.length; i++) {
     assert.equal(rated[i].rpAfter! - rated[i].rpDelta!, rated[i - 1].rpAfter, rated[i].matchId);
   }
+});
+
+test('real: stats sent before the match summary still count for that match', () => {
+  // The #2 finish: its new RP arrived 12 s before its summary line.
+  const second = d.matches.find((m) => m.placement === 2)!;
+  assert.deepEqual([second.rpDelta, second.rpAfter, second.rpEstimated], [142, 8642, false]);
 });
 
 // ---------------------------------------------------------------- rules, on small made-up sessions
@@ -146,11 +152,52 @@ test('a match without a summary is left out and counted', () => {
   assert.equal(result.incomplete, 1);
 });
 
+test('the loadout is the pair of guns held longest, melee and a brief pickup ignored', () => {
+  const slots = (weapon0: string, weapon1: string) => info('m1', 'weapons', { weapon0, weapon1 });
+  const base = oneMatch();
+  const end = base.length - 2; // before the summary
+  // One line per second: melee 1 s, CAR alone 1 s, CAR + R-99 1 s, then Spitfire + EVA-8 to the end (3 s).
+  const lines = [...base.slice(0, end), slots('Melee', 'Melee'), slots('C.A.R. SMG', 'Melee'), slots('C.A.R. SMG', 'R-99'),
+    slots('M600 Spitfire', 'EVA-8 Auto'), event('m1', 'kill', '1'), event('m1', 'kill', '2'), ...base.slice(end)].map((l, i) => ({
+    ...l, seq: i, received_at: new Date(Date.UTC(2026, 8, 24, 12, 0, i)).toISOString(),
+  }));
+  assert.deepEqual(buildDataset(lines).dataset.matches[0].loadout, ['EVA-8', 'Spitfire']);
+});
+
+test('a match left before its summary is built from the last scoreboard once GEP ends it', () => {
+  const tabs = (teams: number) => info('m1', 'tabs', { kills: 0, assists: 0, teams, players: teams * 3, damage: 40 });
+  const base = oneMatch().filter((l) => l.key !== 'match_summary');
+  const end = base.length - 1; // pseudo_match_id cleared
+  // Renumbered: the dataset keeps one line per session seq.
+  const lines = [...base.slice(0, end), tabs(20), tabs(12), tabs(8), base[end]].map((l, i) => ({ ...l, seq: i }));
+  assert.equal(buildDataset(lines).dataset.matches.length, 0, 'still playing: left out');
+  const [m] = buildDataset([...lines, { ...event(null, 'match_end'), seq: lines.length }]).dataset.matches;
+  assert.deepEqual([m.placement, m.teams], [8, 20]);
+});
+
 test("the season starts on the API's split start date when an RP snapshot has it", () => {
   const start = new Date(2026, 8, 15, 18).getTime() / 1000; // local 15 Sept
   const snap = line(null, 'rp_snapshot', 'post_match', { body: { global: { rank: { rankedSeasonMeta: { start } } } } });
   assert.equal(buildDataset([...oneMatch(), snap]).dataset.seasonStart, '2026-09-15');
   assert.equal(buildDataset(oneMatch()).dataset.seasonStart, '2026-09-24', 'without one: the first recorded match');
+});
+
+/** GEP's ranked season stats, sent at `at` (before the match unless given). */
+function rankedStats(games: number, rp: number, at = '2026-09-24T11:59:00.000Z'): RecordLine {
+  return { ...info(null, 'player_stats_br_ranked_latest', { season: 30, games, rank_score: rp, teammates_revived: 0 }), received_at: at };
+}
+
+test("a ranked match's RP is the change across the season stats around it", () => {
+  const lines = oneMatch([rankedStats(11, 8_650, '2026-09-24T12:00:30.000Z')]);
+  const [m] = buildDataset([rankedStats(10, 8_600), ...lines]).dataset.matches;
+  assert.deepEqual([m.rpDelta, m.rpAfter, m.rpEstimated], [50, 8_650, false]);
+});
+
+test('until the stats come, the formula estimates the RP, flagged as such', () => {
+  const lines = oneMatch([event('m1', 'kill', '1')]);
+  const [m] = buildDataset([rankedStats(10, 8_600), ...lines]).dataset.matches;
+  // Platinum entry 48; 3rd place 70; one kill at 3rd 18.
+  assert.deepEqual([m.rpDelta, m.rpAfter, m.rpEstimated], [-48 + 70 + 18, null, true]);
 });
 
 test('the same session loaded twice counts once', () => {

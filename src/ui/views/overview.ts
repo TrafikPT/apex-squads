@@ -6,7 +6,7 @@ import { divisionFloors, rankName, rankOf, TIERS } from '../ranks';
 import { kpis, rankedAccount, rankGames, rpByDay } from '../stats';
 import type { ViewContext, ViewResult } from './context';
 import { openMatch } from './matches';
-import { clickable, MIN_SAMPLE } from './shared';
+import { clickable, MIN_SAMPLE, rpText } from './shared';
 
 /**
  * Insight cards under the headline numbers. Each returns null when it has
@@ -73,12 +73,10 @@ function rpCard(matches: MatchFact[]): { card: HTMLElement; draw?: () => void } 
 
 function tiles(matches: MatchFact[]): HTMLElement {
   const k = kpis(matches);
-  const few = k.matches > 0 && k.matches < MIN_SAMPLE;
-  const tile = (label: string, value: string, sample = true) =>
-    el('div', { class: `tile${few && sample ? ' low-sample' : ''}`, title: few && sample ? `Fewer than ${MIN_SAMPLE} matches: too few to judge` : '' },
-      el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
+  const tile = (label: string, value: string) =>
+    el('div', { class: 'tile' }, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value));
   return el('div', { class: 'tiles' },
-    tile('Matches', fmtInt(k.matches), false),
+    tile('Matches', fmtInt(k.matches)),
     tile('Avg placement', k.avgPlacement === null ? '–' : `#${k.avgPlacement.toFixed(1)}`),
     tile('Wins', pct(k.winRate)),
     tile('Top 5', pct(k.top5Rate)),
@@ -94,7 +92,7 @@ function gameCard(ctx: ViewContext, which: 'best' | 'worst'): HTMLElement | null
   if (ctx.matches.length < MIN_SAMPLE) return null;
   const ranked = rankGames(ctx.matches);
   const m = which === 'best' ? ranked[0] : ranked[ranked.length - 1];
-  const sub = [`${fmtInt(m.damage)} dmg`, m.rpDelta === null ? '' : `${signed(m.rpDelta)} RP`, fmtDateTime(m.startedAt)];
+  const sub = [`${fmtInt(m.damage)} dmg`, m.rpDelta === null ? '' : `${rpText(m.rpDelta, m.rpEstimated)} RP`, fmtDateTime(m.startedAt)];
   const card = el('div', { class: 'tile insight with-portrait' },
     legendBadge(m.legend),
     el('div', { class: 'insight-text' },

@@ -35,10 +35,17 @@ export interface MatchFact {
   damage: number;
   revivesGiven: number;
   revivesReceived: number;
-  /** null outside ranked, or when no RP snapshot bracketed the match. */
+  /**
+   * null outside ranked. From the season stats around the match, or, until
+   * they arrive (or if they never do), the formula's estimate (rpEstimated).
+   */
   rpDelta: number | null;
-  /** The account's RP right after the match (first changed snapshot); null when unknown. */
+  /** The account's RP right after the match (first changed snapshot); null when unknown or estimated. */
   rpAfter: number | null;
+  /** rpDelta is src/ui/rp-formula.ts's estimate, not the real change. */
+  rpEstimated: boolean;
+  /** The one or two guns I held longest (GEP's weapon slots); empty without slot data. */
+  loadout: string[];
   /** Sorted teammate player keys joined with '|'. */
   squadKey: string;
 }

@@ -13,7 +13,7 @@ function match(id: string, startedAt: Date, patch: Partial<MatchFact> = {}): Mat
   return {
     matchId: id, accountKey: 'a1', startedAt: startedAt.toISOString(), mode: 'ranked', map: 'Olympus',
     legend: 'Bangalore', placement: 10, teams: 20, kills: 2, assists: 1, knocks: 3, deaths: 1, damage: 800,
-    revivesGiven: 0, revivesReceived: 0, rpDelta: 10, rpAfter: null, squadKey: '', ...patch,
+    revivesGiven: 0, revivesReceived: 0, rpDelta: 10, rpAfter: null, rpEstimated: false, loadout: [], squadKey: '', ...patch,
   };
 }
 
@@ -218,15 +218,20 @@ test('weapon classes: known guns map to a class, anything else is Other', () => 
   assert.equal(weaponClass('Some New Gun'), 'Other');
 });
 
-test('matchLoadout: top two guns by damage, grenades ignored, in class order', () => {
-  assert.deepEqual(matchLoadout([
+test('matchLoadout: the guns held longest, in class order', () => {
+  assert.deepEqual(matchLoadout({ loadout: ['Peacekeeper', 'R-301'] }, [{ weapon: 'Kraber', damage: 900 }]), ['R-301', 'Peacekeeper']);
+});
+
+test('matchLoadout without slot data: top two guns by damage, grenades ignored, in class order', () => {
+  const none = { loadout: [] };
+  assert.deepEqual(matchLoadout(none, [
     { weapon: 'Peacekeeper', damage: 400 },
     { weapon: 'Other', damage: 900 },
     { weapon: 'R-99', damage: 300 },
     { weapon: 'Wingman', damage: 50 },
   ]), ['R-99', 'Peacekeeper'], 'SMG before shotgun; Wingman (3rd) and grenades dropped');
-  assert.deepEqual(matchLoadout([{ weapon: 'Kraber', damage: 100 }]), ['Kraber']);
-  assert.deepEqual(matchLoadout([]), []);
+  assert.deepEqual(matchLoadout(none, [{ weapon: 'Kraber', damage: 100 }]), ['Kraber']);
+  assert.deepEqual(matchLoadout(none, []), []);
 });
 
 test('loadoutStats groups matches by loadout with my numbers', () => {

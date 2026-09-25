@@ -40,7 +40,7 @@ const NAV: [View, string, string][] = [
 ];
 const SETTINGS_ICON = 'M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4';
 
-// Set once by start(), before the first render.
+// Set by useData(): in start(), before the first render, and when a match finishes.
 let data: Dataset;
 let sample: boolean;
 let names: Map<string, string>;
@@ -66,12 +66,16 @@ async function loadData(): Promise<{ data: Dataset; sample: boolean }> {
   return { data: generateMockData(), sample: true };
 }
 
-async function start(): Promise<void> {
-  ({ data, sample } = await loadData());
+function useData(loaded: { data: Dataset; sample: boolean }): void {
+  ({ data, sample } = loaded);
   names = new Map(data.players.map((p) => [p.playerKey, p.name]));
   squadOf = teammateIndex(data);
   regulars = regularPlayers(data);
   teammateChips = frequentTeammates(data, data.matches, 6);
+}
+
+async function start(): Promise<void> {
+  useData(await loadData());
   // ?match=<id> or ?match=latest opens that match's details (dev aid for screenshots).
   const matchParam = params.get('match');
   if (matchParam) {
@@ -79,6 +83,39 @@ async function start(): Promise<void> {
   }
   render();
   window.addEventListener('resize', () => render());
+  // A match finished: new numbers, same view and filters.
+  window.apex?.onDatasetChanged(async () => {
+    if (params.get('data') === 'sample') return;
+    useData(await loadData());
+    renderInPlace();
+  });
+}
+
+/**
+ * render() for new data that nobody asked for: the rebuilt page keeps each
+ * scrolled area where it was, instead of jumping back to the top.
+ */
+function renderInPlace(): void {
+  const scrolled = Array.from(root.querySelectorAll<HTMLElement>('*'))
+    .filter((e) => e.scrollTop || e.scrollLeft)
+    .map((e) => ({ path: childPath(e), className: e.className, top: e.scrollTop, left: e.scrollLeft }));
+  render();
+  for (const s of scrolled) {
+    // Containers come before the rows in them, so their position in the tree survives new rows.
+    const e = s.path.reduce<Element | undefined>((node, i) => node?.children[i], root);
+    if (e instanceof HTMLElement && e.className === s.className) {
+      e.scrollTop = s.top;
+      e.scrollLeft = s.left;
+    }
+  }
+}
+
+function childPath(e: Element): number[] {
+  const path: number[] = [];
+  for (let node = e; node !== root && node.parentElement; node = node.parentElement) {
+    path.unshift(Array.prototype.indexOf.call(node.parentElement.children, node));
+  }
+  return path;
 }
 
 const root = document.getElementById('app')!;

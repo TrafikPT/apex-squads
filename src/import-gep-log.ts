@@ -13,17 +13,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { anonymize } from './anonymize';
-import { parseGepLogLine, replaySession, splitSessions, type GepLogEntry } from './gep-log';
+import {
+  OVERWOLF_GEP_LOG_DIR,
+  parseGepLogLine,
+  replaySession,
+  sessionIdFor,
+  splitSessions,
+  type GepLogEntry,
+} from './gep-log';
 import { JsonlSink } from './jsonl-sink';
 import type { RecordLine } from './recorder';
-
-const DEFAULT_LOG_DIR = path.join(
-  process.env.LOCALAPPDATA ?? '',
-  'Overwolf',
-  'Log',
-  'Apps',
-  'Overwolf General GameEvents Provider',
-);
 
 function main(): void {
   const args = process.argv.slice(2);
@@ -37,7 +36,7 @@ function main(): void {
     else if (args[i] === '--keep') keep.push(args[++i]);
     else inputs.push(args[i]);
   }
-  if (inputs.length === 0) inputs.push(DEFAULT_LOG_DIR);
+  if (inputs.length === 0) inputs.push(OVERWOLF_GEP_LOG_DIR);
 
   const files = inputs.flatMap(listLogFiles);
   if (files.length === 0) {
@@ -59,7 +58,7 @@ function main(): void {
   for (const session of sessions) {
     const start = session[0].at;
     const end = session[session.length - 1].at;
-    const sessionId = `${start.toISOString().replace(/[:.]/g, '-')}_gep-log`;
+    const sessionId = sessionIdFor(start);
     const sourceFiles = parsed
       .filter((f) => f.entries.some((e) => e.at >= start && e.at <= end))
       .map((f) => path.basename(f.file));

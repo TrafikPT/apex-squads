@@ -639,9 +639,10 @@ remove:
   deleting a line and a function.
 - **Conditional cards.** An insight card returns null when it has nothing to
   say, and then takes no space.
-- **Show sample size.** Every rate or average shows its *n*. Rows and tiles
-  under `MIN_SAMPLE` (5 games, `src/ui/views/shared.ts`) are faded and never
-  picked as "best". One player's data, sliced by legend, teammate and map,
+- **Show sample size.** Every rate or average shows its *n*. Rows under
+  `MIN_SAMPLE` (3 games, `src/ui/views/shared.ts`) are never picked as
+  "best". Nothing is faded (decided 2026-09-25): a row that's listed shows its
+  colors. One player's data, sliced by legend, teammate and map,
   gets small fast.
 - Only high-confidence stats. Medium-confidence ones (damage per weapon) are
   labelled as estimates.
@@ -721,7 +722,7 @@ Overwolf's overlay replaces it once the app is approved.
 | Enemy squad card on first contact (their ranks) | Same reason: their ranks are mine or misleadingly lower |
 | After-match card | The game's own summary screen already shows it |
 | Comp win-rate matrix, "squad chemistry" score, teammate card in the overlay | Samples too small (hundreds of trios; randoms met once) |
-| RP breakdown (entry cost / placement / kills) | The API's RP delta already tells the story; the formula changes every season |
+| RP breakdown (entry cost / placement / kills) shown per match | The real RP delta already tells the story. The formula is used only to estimate a match's RP until GEP's stats bring the real value, 15-30 s later (`src/ui/rp-formula.ts`, added 2026-09-25; re-check it each season) |
 | Placement histogram | Avg placement and Top 5 % already cover it |
 | Fight/engagement detection | Only medium confidence: GEP has no damage-taken events |
 | Ring discipline | Hard to read, hard to act on |

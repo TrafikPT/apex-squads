@@ -5,7 +5,17 @@
  * those through the Recorder gives recordings that look like ours, minus what
  * only our app adds (info snapshots, RP snapshots, its own lifecycle lines).
  */
+import path from 'node:path';
 import { APEX_GAME_ID, Recorder, type Clock, type GepMessage, type Sink } from './recorder';
+
+/** Where the Overwolf client writes the log; index.html.log is the current session's. */
+export const OVERWOLF_GEP_LOG_DIR = path.join(
+  process.env.LOCALAPPDATA ?? '',
+  'Overwolf',
+  'Log',
+  'Apps',
+  'Overwolf General GameEvents Provider',
+);
 
 export type GepLogEntry =
   | { at: Date; type: 'session_start' }
@@ -86,8 +96,13 @@ export function splitSessions(entries: Iterable<GepLogEntry>): GepLogEntry[][] {
   return sessions.filter((s) => s.some((e) => e.type === 'info' || e.type === 'event'));
 }
 
+/** A session's id in recordings/: its first log time, so reimports replace the same file. */
+export function sessionIdFor(start: Date): string {
+  return `${start.toISOString().replace(/[:.]/g, '-')}_gep-log`;
+}
+
 /** Clock that reports the log time of the entry being replayed. Timers never fire. */
-class ReplayClock implements Clock {
+export class ReplayClock implements Clock {
   at = new Date(0);
   now(): Date {
     return this.at;
@@ -116,27 +131,32 @@ export function replaySession(
   recorder.lifecycle('session_start', { imported_from: 'overwolf_gep_log', ...source });
   for (const e of session) {
     clock.at = e.at;
-    switch (e.type) {
-      case 'info':
-        recorder.onInfoUpdate(e.msg);
-        break;
-      case 'event':
-        recorder.onGameEvent(e.msg);
-        break;
-      case 'game_launched':
-        if (e.gameId === APEX_GAME_ID) recorder.lifecycle('game_detected', { game_id: e.gameId });
-        break;
-      case 'game_ended':
-        if (e.gameId === APEX_GAME_ID) recorder.lifecycle('game_exit', { game_id: e.gameId });
-        break;
-      case 'unparsed':
-        unparsed++;
-        recorder.lifecycle('import_unparsed_line', { text: e.text });
-        break;
-    }
+    if (replayEntry(recorder, e)) unparsed++;
   }
   recorder.lifecycle('session_end');
   return { unparsed };
+}
+
+/** Hands one log entry to the Recorder; true if it was an unparsed line. */
+export function replayEntry(recorder: Recorder, e: GepLogEntry): boolean {
+  switch (e.type) {
+    case 'info':
+      recorder.onInfoUpdate(e.msg);
+      break;
+    case 'event':
+      recorder.onGameEvent(e.msg);
+      break;
+    case 'game_launched':
+      if (e.gameId === APEX_GAME_ID) recorder.lifecycle('game_detected', { game_id: e.gameId });
+      break;
+    case 'game_ended':
+      if (e.gameId === APEX_GAME_ID) recorder.lifecycle('game_exit', { game_id: e.gameId });
+      break;
+    case 'unparsed':
+      recorder.lifecycle('import_unparsed_line', { text: e.text });
+      return true;
+  }
+  return false;
 }
 
 /** Each log file starts with a UTF-8 byte order mark. */

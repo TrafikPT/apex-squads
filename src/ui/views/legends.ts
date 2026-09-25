@@ -3,7 +3,7 @@ import { fixed, fmtInt, pct, place, signed } from '../format';
 import { legendBadge } from '../portraits';
 import { kpis, Kpis, legendStats, LegendRow } from '../stats';
 import type { ViewContext, ViewResult } from './context';
-import { clickable, damageText, markSample, MIN_SAMPLE, rpCell, rpPerMatch, sampleNote, SortColumn, sortableHead, sortRows, SortState,
+import { clickable, damageText, MIN_SAMPLE, rpCell, rpPerMatch, SortColumn, sortableHead, sortRows, SortState,
   vsAverage } from './shared';
 
 const COLUMNS: SortColumn<LegendRow>[] = [
@@ -78,7 +78,6 @@ function legendsCard(ctx: ViewContext, rows: LegendRow[], baseline: Kpis): HTMLE
   });
 
   const body = el('tbody', {});
-  let faded = false;
   for (const r of sorted) {
     const row = el('tr', {},
       el('td', {}, el('div', { class: 'who' }, legendBadge(r.legend), el('span', { class: 'legend-name' }, r.legend))),
@@ -94,10 +93,9 @@ function legendsCard(ctx: ViewContext, rows: LegendRow[], baseline: Kpis): HTMLE
       el('td', { class: 'num' }, damageText(r.me)),
       rpCell(rpPerMatch(r.me)),
     );
-    faded = markSample(row, r.games) || faded;
     clickable(row, `Show matches as ${r.legend}`, () => ctx.setView('overview', { legend: r.legend }));
     body.append(row);
   }
-  card.append(el('div', { class: 'table-scroll' }, el('table', { class: 'legends-table' }, el('thead', {}, head), body)), sampleNote(faded));
+  card.append(el('div', { class: 'table-scroll' }, el('table', { class: 'legends-table' }, el('thead', {}, head), body)));
   return card;
 }

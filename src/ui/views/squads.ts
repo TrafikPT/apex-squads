@@ -3,7 +3,7 @@ import { fixed, pct, place, signed } from '../format';
 import { legendBadge } from '../portraits';
 import { compStats, CompRow, kpis, Kpis, squadStats, SquadRow, teammateStats, TeammateRow } from '../stats';
 import type { ViewContext, ViewResult } from './context';
-import { clickable, damageText, headRow, markSample, MIN_SAMPLE, rpCell, rpPerMatch, sampleNote, SortColumn, sortableHead, sortRows,
+import { clickable, damageText, headRow, MIN_SAMPLE, rpCell, rpPerMatch, SortColumn, sortableHead, sortRows,
   SortState, vsAverage } from './shared';
 
 /** Teammates per match besides me (trios). Empty slots are shown as randoms. */
@@ -100,7 +100,6 @@ function squadsCard(ctx: ViewContext, squads: SquadRow[], baseline: Kpis, topLeg
     return card;
   }
   const body = el('tbody', {});
-  let faded = false;
   for (const s of squads) {
     const faces = el('span', { class: 'faces' });
     for (const f of s.friends) faces.append(legendBadge(topLegend.get(f) ?? ''));
@@ -118,14 +117,13 @@ function squadsCard(ctx: ViewContext, squads: SquadRow[], baseline: Kpis, topLeg
       el('td', { class: 'num' }, damageText(s.me)),
       rpCell(rpPerMatch(s.me)),
     );
-    faded = markSample(row, s.games) || faded;
     if (s.friends.length) clickable(row, `Show matches with ${squadName(ctx, s.friends)}`, () => ctx.setView('overview', { withPlayers: s.friends }));
     body.append(row);
   }
   card.append(el('div', { class: 'table-scroll' }, el('table', {},
     el('thead', {}, headRow([['Squad', false], ['Games', true], ['Avg place', true], ['vs avg', true], ['Wins', true],
       ['Top 5', true], ['Your K/D', true], ['Your dmg', true], ['RP/match', true]])),
-    body)), sampleNote(faded));
+    body)));
   return card;
 }
 
@@ -139,7 +137,6 @@ function teammatesCard(ctx: ViewContext, mates: TeammateRow[], baseline: Kpis): 
     return card;
   }
   const body = el('tbody', {});
-  let faded = false;
   for (const t of mates) {
     const name = ctx.playerName(t.playerKey);
     const row = el('tr', {},
@@ -153,14 +150,13 @@ function teammatesCard(ctx: ViewContext, mates: TeammateRow[], baseline: Kpis): 
       el('td', { class: 'num' }, damageText(t.me)),
       rpCell(rpPerMatch(t.me)),
     );
-    faded = markSample(row, t.games) || faded;
     clickable(row, `Show matches with ${name}`, () => ctx.setView('overview', { withPlayers: [t.playerKey] }));
     body.append(row);
   }
   card.append(el('div', { class: 'table-scroll' }, el('table', {},
     el('thead', {}, headRow([['Player', false], ['Games', true], ['Their K/D', true], ['Their knocks', true],
       ['Your place', true], ['vs avg', true], ['Your K/D', true], ['Your dmg', true], ['RP/match', true]])),
-    body)), sampleNote(faded));
+    body)));
   return card;
 }
 
@@ -212,7 +208,6 @@ function compsCard(ctx: ViewContext, comps: CompRow[], baseline: Kpis): HTMLElem
     ctx.setView('squads');
   });
   const body = el('tbody', {});
-  let faded = false;
   for (const c of sortRows(comps, COMP_COLUMNS, compSort)) {
     const row = el('tr', {},
       el('td', {}, el('div', { class: 'who' }, compFaces(c.legends), el('span', { class: 'comp-names' }, c.legends.join(' · ')))),
@@ -225,9 +220,8 @@ function compsCard(ctx: ViewContext, comps: CompRow[], baseline: Kpis): HTMLElem
       el('td', { class: 'num' }, c.teamKd.toFixed(2)),
       rpCell(rpPerMatch(c.me)),
     );
-    faded = markSample(row, c.games) || faded;
     body.append(row);
   }
-  card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)), sampleNote(faded));
+  card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)));
   return card;
 }

@@ -5,14 +5,15 @@
  * here; sql/ stays for exploring the raw lines. Rules follow DESIGN.md §5 and
  * the match-boundary findings in §9.1.
  */
-import { baseName, legendName, mapName, weaponOrOther } from './game-names';
+import { baseName, legendName, mapName, weaponName, weaponOrOther } from './game-names';
 import type { RecordLine } from './recorder';
 import type { Account, Dataset, MatchFact, Mode, Player, TeammateFact, WeaponFact } from './ui/facts';
 import { rankOf } from './ui/ranks';
+import { estimateRp } from './ui/rp-formula';
 
 export interface BuildResult {
   dataset: Dataset;
-  /** Matches left out because they have no match_summary (quit early, or recording stopped mid-match). */
+  /** Matches left out because they have no match_summary and GEP never ended them (still playing, or recording stopped mid-match). */
   incomplete: number;
 }
 
@@ -22,6 +23,8 @@ interface MatchLines {
   pre: RecordLine[];
   own: RecordLine[];
   gameMode: string | null;
+  /** GEP's match_end came after the match's lines: it finished, even without a summary. */
+  ended: boolean;
 }
 
 interface RosterEntry {
@@ -64,6 +67,8 @@ export function buildDataset(lines: RecordLine[]): BuildResult {
   const seasons = new Map<string, number>();
   let incomplete = 0;
 
+  const rpBefore = new Map<string, number>();
+
   for (const m of splitMatches(lines)) {
     const built = buildMatch(m, snapshots);
     if (!built) {
@@ -71,6 +76,7 @@ export function buildDataset(lines: RecordLine[]): BuildResult {
       continue;
     }
     matches.push(built.match);
+    if (built.rpBefore !== null) rpBefore.set(built.match.matchId, built.rpBefore);
     teammates.push(...built.teammates);
     weapons.push(...built.weapons);
     for (const t of built.roster) players.set(t.key, t.name);
@@ -86,6 +92,7 @@ export function buildDataset(lines: RecordLine[]): BuildResult {
     }
   }
   matches.sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+  estimateMissingRp(matches, rpBefore);
 
   return {
     dataset: {
@@ -121,20 +128,24 @@ function splitMatches(lines: RecordLine[]): MatchLines[] {
     session = [...new Map(session.map((l) => [l.seq, l])).values()].sort((a, b) => a.seq - b.seq);
     let pre: RecordLine[] = [];
     let currentId: string | null = null;
+    // The last match seen; match_end arrives untagged, after the id is cleared.
+    let lastId: string | null = null;
     // Sent only when it changes, in the lobby: carried forward.
     let gameMode: string | null = null;
     for (const l of session) {
       if (l.key === 'game_mode' && typeof l.value === 'string' && l.value) gameMode = l.value;
       if (!l.match_id) {
         currentId = null;
+        if (l.kind === 'event' && l.key === 'match_end' && lastId) byMatch.get(lastId)!.ended = true;
         pre.push(l);
         continue;
       }
       let current = byMatch.get(l.match_id);
       if (currentId !== l.match_id) {
         // A reconnect can continue the same match id in a later session.
-        if (!current) byMatch.set(l.match_id, (current = { matchId: l.match_id, pre, own: [], gameMode }));
+        if (!current) byMatch.set(l.match_id, (current = { matchId: l.match_id, pre, own: [], gameMode, ended: false }));
         currentId = l.match_id;
+        lastId = l.match_id;
         pre = [];
       }
       current!.own.push(l);
@@ -148,7 +159,7 @@ function splitMatches(lines: RecordLine[]): MatchLines[] {
 
 function buildMatch(m: MatchLines, snapshots: Record<Mode, StatsSnapshot[]>) {
   const all = [...m.pre, ...m.own];
-  const summary = lastObject(m.own, 'match_summary');
+  const summary = lastObject(m.own, 'match_summary') ?? (m.ended ? summaryFromScoreboard(m.own) : null);
   if (!summary) return null;
 
   const roster = rosterOf(all);
@@ -159,7 +170,9 @@ function buildMatch(m: MatchLines, snapshots: Record<Mode, StatsSnapshot[]>) {
 
   const startLine = m.own.find((l) => l.key === 'match_start') ?? m.own[0];
   const startedAt = startLine.received_at;
-  const endAt = Date.parse(m.own[m.own.length - 1].received_at);
+  // Stats brackets start here, not at the end: GEP can send the post-match stats
+  // before the match_summary line (seen on a #2 finish).
+  const startAt = Date.parse(startedAt);
   const mode: Mode = m.gameMode === '#GAME_MODE_RANKED' ? 'ranked' : 'pubs';
   const mapId = lastString(all, 'map_id');
 
@@ -223,7 +236,7 @@ function buildMatch(m: MatchLines, snapshots: Record<Mode, StatsSnapshot[]>) {
     };
   });
 
-  const bracket = statsBracket(snapshots[mode], endAt);
+  const bracket = statsBracket(snapshots[mode], startAt);
   const match: MatchFact = {
     matchId: m.matchId,
     accountKey: me?.key ?? `name:${baseName(meName)}`,
@@ -242,6 +255,8 @@ function buildMatch(m: MatchLines, snapshots: Record<Mode, StatsSnapshot[]>) {
     revivesReceived: events('healed_from_ko').length,
     rpDelta: mode === 'ranked' && bracket ? bracket.after.rp - bracket.before.rp : null,
     rpAfter: mode === 'ranked' && bracket ? bracket.after.rp : null,
+    rpEstimated: false,
+    loadout: heldLongest(m.own),
     squadKey: mates.map((t) => t.key).sort().join('|'),
   };
 
@@ -249,7 +264,7 @@ function buildMatch(m: MatchLines, snapshots: Record<Mode, StatsSnapshot[]>) {
     .filter(([, w]) => w.kills || w.knocks || w.damage)
     .map(([weapon, w]) => ({ matchId: m.matchId, weapon, kills: w.kills, knocks: w.knocks, damage: Math.round(w.damage) }));
 
-  const before = mode === 'ranked' ? lastBefore(snapshots.ranked, endAt) : null;
+  const before = mode === 'ranked' ? lastBefore(snapshots.ranked, startAt) : null;
   return {
     match,
     teammates,
@@ -307,12 +322,35 @@ function legendPicks(lines: RecordLine[]): Map<string, string> {
  * include RP (`rank_score`) and `teammates_revived`, so the difference across a
  * match gives its RP change and revives given. Only trusted when exactly one
  * game was added in between; otherwise the change can't be split per match.
+ * "Before" is the last snapshot before the match started; "after" the first
+ * one that counts it, which may arrive before the match's last line.
  */
-function statsBracket(snaps: StatsSnapshot[], endAt: number) {
-  const before = lastBefore(snaps, endAt);
+function statsBracket(snaps: StatsSnapshot[], startAt: number) {
+  const before = lastBefore(snaps, startAt);
   if (!before) return null;
-  const after = snaps.find((s) => s.at > endAt && s.games > before.games);
+  const after = snaps.find((s) => s.at > startAt && s.games > before.games);
   return after && after.games === before.games + 1 && after.season === before.season ? { before, after } : null;
+}
+
+/**
+ * Ranked matches without a real RP change (the stats haven't arrived yet, or
+ * never did) get the formula's estimate, flagged so the UI can say so. Walks
+ * each account's matches in order, for the top-5 streak and the RP before.
+ */
+function estimateMissingRp(matches: MatchFact[], rpBefore: Map<string, number>): void {
+  const perAccount = new Map<string, { streak: number; rp: number | null }>();
+  for (const m of matches) {
+    if (m.mode !== 'ranked') continue;
+    let acc = perAccount.get(m.accountKey);
+    if (!acc) perAccount.set(m.accountKey, (acc = { streak: 0, rp: null }));
+    acc.streak = m.placement >= 1 && m.placement <= 5 ? acc.streak + 1 : 0;
+    const before = rpBefore.get(m.matchId) ?? acc.rp;
+    if (m.rpDelta === null && before !== null && m.placement > 0) {
+      m.rpDelta = estimateRp({ placement: m.placement, kills: m.kills, assists: m.assists, rpBefore: before, topFiveStreak: acc.streak });
+      m.rpEstimated = true;
+    }
+    acc.rp = m.rpAfter ?? (before !== null && m.rpDelta !== null ? before + m.rpDelta : acc.rp);
+  }
 }
 
 function lastBefore(snaps: StatsSnapshot[], at: number): StatsSnapshot | null {
@@ -382,6 +420,48 @@ function decode(value: unknown): unknown {
   } catch {
     return value;
   }
+}
+
+/**
+ * My loadout: the guns in my two slots (GEP's `weapons`) that I held the
+ * longest, so early looting swaps and a gun that never hit anyone don't
+ * decide it. One gun if that's all I carried; empty without slot data.
+ */
+function heldLongest(own: RecordLine[]): string[] {
+  const held = new Map<string, number>();
+  let pair: string | null = null;
+  let since = 0;
+  const hold = (until: number) => {
+    if (pair !== null) held.set(pair, (held.get(pair) ?? 0) + until - since);
+  };
+  for (const l of own) {
+    if (l.key !== 'weapons') continue;
+    const slots = decode(l.value) as { weapon0?: unknown; weapon1?: unknown } | null;
+    const guns = [slots?.weapon0, slots?.weapon1]
+      .map((w) => (typeof w === 'string' ? weaponName(w) : null))
+      .filter((w): w is string => w !== null);
+    const at = Date.parse(l.received_at);
+    hold(at);
+    pair = guns.length ? [...new Set(guns)].sort().join('|') : null;
+    since = at;
+  }
+  if (own.length) hold(Date.parse(own[own.length - 1].received_at));
+  const [longest] = [...held].sort((a, b) => b[1] - a[1]);
+  return longest ? longest[0].split('|') : [];
+}
+
+/**
+ * For a match left before its summary screen (GEP ends it without a
+ * match_summary): the squads still alive on my last scoreboard (`tabs`) is my
+ * placement, and the most it ever showed is the lobby's size. Off by a little
+ * if a squad fell in my last seconds, or my teammates played on after I left.
+ */
+function summaryFromScoreboard(own: RecordLine[]): Record<string, unknown> | null {
+  const teams = own
+    .filter((l) => l.key === 'tabs')
+    .map((l) => Number((decode(l.value) as { teams?: unknown } | null)?.teams))
+    .filter((n) => n > 0);
+  return teams.length ? { rank: teams[teams.length - 1], teams: Math.max(...teams) } : null;
 }
 
 function lastObject(lines: RecordLine[], key: string): Record<string, unknown> | null {

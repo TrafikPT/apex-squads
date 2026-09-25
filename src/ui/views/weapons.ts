@@ -3,7 +3,7 @@ import { fixed, fmtInt, pct } from '../format';
 import { kpis, Kpis, loadoutStats, LoadoutRow, weaponStats, WeaponRow } from '../stats';
 import { OTHER_WEAPON, WEAPON_CLASSES, WeaponClass, weaponClass, weaponLabel } from '../weapons';
 import type { ViewContext, ViewResult } from './context';
-import { damageText, markSample, MIN_SAMPLE, rpCell, rpPerMatch, sampleNote, SortColumn, sortableHead, sortRows, SortState,
+import { damageText, MIN_SAMPLE, rpCell, rpPerMatch, SortColumn, sortableHead, sortRows, SortState,
   vsAverage } from './shared';
 
 /**
@@ -95,7 +95,7 @@ function insights(rows: WeaponRow[], loadouts: LoadoutRow[]): HTMLElement {
       el('div', { class: 'sub' }, sub));
   return el('div', { class: 'insights' },
     tile('Most used loadout', mostUsedLoadout ? mostUsedLoadout.weapons.join(' + ') : '–',
-      mostUsedLoadout ? `${mostUsedLoadout.games} games` : 'no loadout with 3+ games'),
+      mostUsedLoadout ? `${mostUsedLoadout.games} games` : 'no loadouts in this selection'),
     tile('Best loadout', bestLoadout ? bestLoadout.weapons.join(' + ') : '–',
       bestLoadout ? `${fixed(bestLoadout.me.kd, 2)} K/D · ${bestLoadout.games} games` : `needs ${MIN_SAMPLE}+ games with it`),
     tile('Most kills', mostKills?.weapon ?? '–', mostKills ? `${mostKills.kills} kills · ${mostKills.knocks} knocks` : 'no weapon data'),
@@ -173,7 +173,6 @@ function weaponsCard(ctx: ViewContext, rows: WeaponRow[]): HTMLElement {
     ctx.setView('weapons');
   });
   const body = el('tbody', {});
-  let faded = false;
   for (const r of sortRows(rows, COLUMNS, sort)) {
     const cls = weaponClass(r.weapon);
     const gun = isGun(r);
@@ -191,10 +190,9 @@ function weaponsCard(ctx: ViewContext, rows: WeaponRow[]): HTMLElement {
         el('div', { class: 'bar-track' }, el('div', { class: 'bar', style: `width: ${(r.damageShare / maxShare) * 100}%` })),
         el('span', { class: 'share' }, pct(r.damageShare)))),
     );
-    faded = markSample(row, r.matches) || faded;
     body.append(row);
   }
-  card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)), sampleNote(faded));
+  card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)));
   return card;
 }
 
@@ -202,9 +200,9 @@ function weaponsCard(ctx: ViewContext, rows: WeaponRow[]): HTMLElement {
 
 function loadoutsCard(ctx: ViewContext, loadouts: LoadoutRow[], baseline: Kpis): HTMLElement {
   const card = el('section', { class: 'card table-card' },
-    tableTitle(ctx, 'loadout = your two highest-damage guns in the match'));
+    tableTitle(ctx, 'loadout = the two guns you held longest in the match'));
   if (!loadouts.length) {
-    card.append(el('div', { class: 'empty' }, 'No loadout with 3+ games in this selection'));
+    card.append(el('div', { class: 'empty' }, 'No loadouts in this selection'));
     return card;
   }
   const head = sortableHead(LOADOUT_COLUMNS, loadoutSort, (next) => {
@@ -212,7 +210,6 @@ function loadoutsCard(ctx: ViewContext, loadouts: LoadoutRow[], baseline: Kpis):
     ctx.setView('weapons');
   });
   const body = el('tbody', {});
-  let faded = false;
   for (const l of sortRows(loadouts, LOADOUT_COLUMNS, loadoutSort)) {
     const guns = el('div', { class: 'loadout-cell' });
     l.weapons.forEach((w, i) => {
@@ -231,9 +228,8 @@ function loadoutsCard(ctx: ViewContext, loadouts: LoadoutRow[], baseline: Kpis):
       el('td', { class: 'num' }, damageText(l.me)),
       rpCell(rpPerMatch(l.me)),
     );
-    faded = markSample(row, l.games) || faded;
     body.append(row);
   }
-  card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)), sampleNote(faded));
+  card.append(el('div', { class: 'table-scroll' }, el('table', {}, el('thead', {}, head), body)));
   return card;
 }

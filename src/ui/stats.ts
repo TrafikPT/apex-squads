@@ -359,21 +359,21 @@ const classRank = (weapon: string) => {
 };
 
 /**
- * A match's loadout: the two guns that did the most damage in it (grenades and
- * abilities ignored). Simple on purpose; mid-match swaps count toward whichever
- * two guns were actually used most (DESIGN.md §5).
+ * A match's loadout: the guns I held longest (MatchFact.loadout), or, for
+ * matches without weapon-slot data, the two that did the most damage
+ * (grenades and abilities ignored). In class order.
  */
-export function matchLoadout(guns: { weapon: string; damage: number }[]): string[] {
-  return guns
+export function matchLoadout(m: Pick<MatchFact, 'loadout'>, guns: { weapon: string; damage: number }[]): string[] {
+  const weapons = m.loadout.length ? [...m.loadout] : guns
     .filter((w) => w.weapon !== OTHER_WEAPON)
     .sort((a, b) => b.damage - a.damage)
     .slice(0, 2)
-    .map((w) => w.weapon)
-    .sort((a, b) => classRank(a) - classRank(b) || a.localeCompare(b));
+    .map((w) => w.weapon);
+  return weapons.sort((a, b) => classRank(a) - classRank(b) || a.localeCompare(b));
 }
 
-/** My results per loadout in the selection, most played first. */
-export function loadoutStats(data: Dataset, matches: MatchFact[], minGames = 3): LoadoutRow[] {
+/** My results per loadout in the selection, most played first; every loadout by default. */
+export function loadoutStats(data: Dataset, matches: MatchFact[], minGames = 1): LoadoutRow[] {
   const ids = new Set(matches.map((m) => m.matchId));
   const gunsByMatch = new Map<string, { weapon: string; damage: number }[]>();
   for (const w of data.weapons) {
@@ -384,7 +384,7 @@ export function loadoutStats(data: Dataset, matches: MatchFact[], minGames = 3):
   }
   const groups = new Map<string, MatchFact[]>();
   for (const m of matches) {
-    const loadout = matchLoadout(gunsByMatch.get(m.matchId) ?? []);
+    const loadout = matchLoadout(m, gunsByMatch.get(m.matchId) ?? []);
     if (!loadout.length) continue;
     const key = loadout.join('|');
     let g = groups.get(key);

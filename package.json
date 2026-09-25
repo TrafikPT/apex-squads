@@ -23,6 +23,7 @@
     "ui:check": "tsc -p tsconfig.ui.json",
     "app:preview": "npm run build && npm run ui:build && electron dist/preview-main.js",
     "popup:preview": "npm run build && npm run ui:build && electron dist/popup-preview.js",
+    "popup:live": "npm run build && npm run ui:build && electron dist/live-popups.js",
     "lint": "eslint .",
     "import:gep-log": "npm run build && node dist/import-gep-log.js"
   },

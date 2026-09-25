@@ -3,33 +3,27 @@ import { el } from '../dom';
 import { fmtInt, signed, signedFixed } from '../format';
 import type { Kpis } from '../stats';
 
-/**
- * Below this many games a row's rates and averages are too noisy to judge:
- * the row is faded, and it's never picked as "best" at something.
- */
-export const MIN_SAMPLE = 5;
-
-/** Fades a table row with fewer than MIN_SAMPLE games; returns whether it did. */
-export function markSample(row: HTMLElement, games: number): boolean {
-  const low = games < MIN_SAMPLE;
-  row.classList.toggle('low-sample', low);
-  return low;
-}
-
-/** Table footnote explaining faded rows; empty when none were faded. */
-export function sampleNote(anyFaded: boolean): HTMLElement | string {
-  return anyFaded ? el('div', { class: 'footnote' }, `Faded rows: fewer than ${MIN_SAMPLE} games, too few to judge`) : '';
-}
+/** Fewest games for a row to be picked as "best" at something; the same 3 the squad tables need to list a row. */
+export const MIN_SAMPLE = 3;
 
 export function rpPerMatch(k: Kpis): number | null {
   return k.rpNet === null || !k.rpMatches ? null : k.rpNet / k.rpMatches;
 }
 
 /** Signed RP value, green/red; '–' when there's no ranked data. */
-export function rpCell(rp: number | null): HTMLElement {
+export function rpCell(rp: number | null, estimated = false): HTMLElement {
   const td = el('td', { class: 'num' });
-  td.append(rp === null ? el('span', { class: 'muted' }, '–') : el('span', { class: rp >= 0 ? 'good' : 'bad' }, signed(rp)));
+  td.append(rp === null ? el('span', { class: 'muted' }, '–')
+    : el('span', { class: `${rp >= 0 ? 'good' : 'bad'}${estimated ? ' estimate' : ''}`, ...(estimated ? { title: ESTIMATE_TITLE } : {}) },
+      rpText(rp, estimated)));
   return td;
+}
+
+export const ESTIMATE_TITLE = 'Estimated from placement, kills and assists; replaced by the real RP when it arrives';
+
+/** "+39", or "≈+39" for the formula's estimate. */
+export function rpText(rp: number, estimated: boolean): string {
+  return `${estimated ? '≈' : ''}${signed(rp)}`;
 }
 
 export function damageText(k: Kpis): string {

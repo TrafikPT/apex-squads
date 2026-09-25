@@ -88,6 +88,22 @@ npm run popup:preview   # replays your latest recorded match's popups, 4 s apart
 `APEX_REPLAY_MATCH=<match id>` picks another match. The cards use only the
 recordings (no API key needed); see DESIGN.md §12.
 
+### Live, before our app can use GEP
+While another Apex app (e.g. TRN's tracker) runs, the Overwolf client logs
+every game event. This follows that log and shows the cards as you play:
+```powershell
+npm run popup:live
+```
+It also writes the session to `recordings/` as it goes (under the importer's
+name, so a later `import:gep-log` replaces it). Point the dashboard at that
+folder and it reloads by itself when a match finishes:
+```powershell
+$env:APEX_RECORDINGS_DIR = (Resolve-Path recordings).Path; npm run app:preview
+```
+The popup shows over Apex only in borderless windowed mode. During a match
+the dashboard can't take focus, so it never pulls the mouse pointer over the
+game.
+
 Launching Electron from VS Code's terminal on Windows can fail with
 `Cannot read properties of undefined (reading 'whenReady')`: VS Code sets
 `ELECTRON_RUN_AS_NODE`. Clear it first (`Remove-Item Env:ELECTRON_RUN_AS_NODE`;
