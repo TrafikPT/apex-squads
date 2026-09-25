@@ -14,7 +14,6 @@
 import { app } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import { StringDecoder } from 'node:string_decoder';
 import {
   OVERWOLF_GEP_LOG_DIR,
   parseGepLogLine,
@@ -24,6 +23,7 @@ import {
   type GepLogEntry,
 } from './gep-log';
 import { JsonlSink } from './jsonl-sink';
+import { LogTail } from './log-tail';
 import { PlayerHistory } from './player-history';
 import { describePopup, PopupService } from './popup-service';
 import { PopupWindow } from './popup-window';
@@ -41,45 +41,6 @@ function log(message: string): void {
   console.log(`${new Date().toTimeString().slice(0, 8)} ${message}`);
 }
 
-/** Reads what was appended to the log since the last call; starts over when Overwolf rotates it. */
-class LogTail {
-  private offset = 0;
-  private ino = -1;
-  private decoder = new StringDecoder('utf8');
-  private partial = '';
-
-  constructor(private readonly file: string) {}
-
-  /** Complete new lines, and whether the file was replaced since the last read. */
-  read(): { lines: string[]; restarted: boolean } {
-    let stat: fs.Stats;
-    try {
-      stat = fs.statSync(this.file);
-    } catch {
-      return { lines: [], restarted: false }; // Between Overwolf's rename and the new file.
-    }
-    const restarted = this.ino !== -1 && (stat.ino !== this.ino || stat.size < this.offset);
-    if (restarted || this.ino === -1) {
-      this.offset = 0;
-      this.decoder = new StringDecoder('utf8');
-      this.partial = '';
-      this.ino = stat.ino;
-    }
-    if (stat.size === this.offset) return { lines: [], restarted };
-
-    const buffer = Buffer.alloc(stat.size - this.offset);
-    const fd = fs.openSync(this.file, 'r');
-    try {
-      fs.readSync(fd, buffer, 0, buffer.length, this.offset);
-    } finally {
-      fs.closeSync(fd);
-    }
-    this.offset = stat.size;
-    const lines = (this.partial + this.decoder.write(buffer)).split('\n');
-    this.partial = lines.pop() ?? '';
-    return { lines, restarted };
-  }
-}
 
 function parse(lines: string[]): GepLogEntry[] {
   return lines.map(parseGepLogLine).filter((e): e is GepLogEntry => e !== null);

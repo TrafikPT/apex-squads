@@ -49,6 +49,15 @@ test("anonymous-mode names are kept: the game already made them up", () => {
   assert.equal((lines[lines.length - 1].value as { attackerName: string }).attackerName, 'Fuse2676');
 });
 
+test("a player named like a weapon id isn't a leak in the kill feed's weapon field", () => {
+  // "dragon" is the Rampage's kill-feed id; a player called Dragon met it in real data.
+  const { leaks } = anonymize([
+    line('roster_3', JSON.stringify({ name: 'dragon', is_local: '0', isTeammate: false, platform_id: '441' })),
+    line('kill_feed', { local_player_name: '[T] Me', attackerName: 'dragon', victimName: '[T]Friend', weaponName: 'dragon', action: 'kill' }),
+  ], []);
+  assert.deepEqual(leaks, []);
+});
+
 test('a name left behind anywhere is reported as a leak', () => {
   const extra = line('some_new_key', JSON.stringify({ who: 'Stranger' }));
   assert.deepEqual(anonymize([...LINES, extra], ['Friend']).leaks, ['Stranger']);

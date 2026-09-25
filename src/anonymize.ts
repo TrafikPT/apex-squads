@@ -86,7 +86,11 @@ export function anonymize(lines: RecordLine[], keepNames: string[]): AnonymizeRe
 
 /** Looks for replaced names/IDs anywhere in the serialized output, including double-encoded payloads. */
 function findLeaks(lines: RecordLine[], names: string[], ids: string[]): string[] {
-  const text = lines.map((l) => JSON.stringify(l)).join('\n');
+  // Weapon ids aren't names, even when a player is called the same ("dragon" is the Rampage).
+  const text = lines
+    .map((l) => JSON.stringify(l))
+    .join('\n')
+    .replace(/(\\*"weaponName\\*":\\*")[^"\\]*/g, '$1');
   const escapes = (s: string) => {
     const once = JSON.stringify(s).slice(1, -1);
     return [s, once, JSON.stringify(once).slice(1, -1)];

@@ -25,6 +25,8 @@ interface MatchLines {
   gameMode: string | null;
   /** GEP's match_end came after the match's lines: it finished, even without a summary. */
   ended: boolean;
+  /** The session's last map before this match; GEP doesn't resend an unchanged map after clearing it. */
+  lobbyMap: { id: string | null; name: string | null };
 }
 
 interface RosterEntry {
@@ -132,8 +134,12 @@ function splitMatches(lines: RecordLine[]): MatchLines[] {
     let lastId: string | null = null;
     // Sent only when it changes, in the lobby: carried forward.
     let gameMode: string | null = null;
+    // Cleared after each match and resent only when the rotation changes: carried forward.
+    const lobbyMap = { id: null as string | null, name: null as string | null };
     for (const l of session) {
       if (l.key === 'game_mode' && typeof l.value === 'string' && l.value) gameMode = l.value;
+      if (l.key === 'map_id' && typeof l.value === 'string' && l.value) lobbyMap.id = l.value;
+      if (l.key === 'map_name' && typeof l.value === 'string' && l.value) lobbyMap.name = l.value;
       if (!l.match_id) {
         currentId = null;
         if (l.kind === 'event' && l.key === 'match_end' && lastId) byMatch.get(lastId)!.ended = true;
@@ -143,7 +149,7 @@ function splitMatches(lines: RecordLine[]): MatchLines[] {
       let current = byMatch.get(l.match_id);
       if (currentId !== l.match_id) {
         // A reconnect can continue the same match id in a later session.
-        if (!current) byMatch.set(l.match_id, (current = { matchId: l.match_id, pre, own: [], gameMode, ended: false }));
+        if (!current) byMatch.set(l.match_id, (current = { matchId: l.match_id, pre, own: [], gameMode, ended: false, lobbyMap: { ...lobbyMap } }));
         currentId = l.match_id;
         lastId = l.match_id;
         pre = [];
@@ -174,7 +180,7 @@ function buildMatch(m: MatchLines, snapshots: Record<Mode, StatsSnapshot[]>) {
   // before the match_summary line (seen on a #2 finish).
   const startAt = Date.parse(startedAt);
   const mode: Mode = m.gameMode === '#GAME_MODE_RANKED' ? 'ranked' : 'pubs';
-  const mapId = lastString(all, 'map_id');
+  const mapId = lastString(all, 'map_id') ?? m.lobbyMap.id;
 
   // My numbers. kill/assist events carry running totals; count them if a value is missing.
   const events = (key: string) => m.own.filter((l) => l.kind === 'event' && l.key === key);
@@ -242,7 +248,7 @@ function buildMatch(m: MatchLines, snapshots: Record<Mode, StatsSnapshot[]>) {
     accountKey: me?.key ?? `name:${baseName(meName)}`,
     startedAt,
     mode,
-    map: mapName(mapId, lastString(all, 'map_name')),
+    map: mapName(mapId, lastString(all, 'map_name') ?? m.lobbyMap.name),
     legend: picks.get(LOCAL_PICK) ?? picks.get(baseName(meName)) ?? 'Unknown',
     placement: Number(summary.rank) || 0,
     teams: Number(summary.teams) || 0,

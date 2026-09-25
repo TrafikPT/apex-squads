@@ -14,7 +14,7 @@ const d = real.dataset;
 const sum = <T>(xs: T[], f: (x: T) => number) => xs.reduce((s, x) => s + f(x), 0);
 
 test('real: every recorded match is built, as ranked, for one account', () => {
-  assert.equal(d.matches.length, 23);
+  assert.equal(d.matches.length, 43);
   assert.equal(real.incomplete, 0);
   assert.ok(d.matches.every((m) => m.mode === 'ranked'));
   assert.equal(d.accounts.length, 1);
@@ -41,7 +41,7 @@ test('real: per-weapon kills, knocks and damage add up to the match totals', () 
 
 test('real: legend select and map arrive before the match id but are still attributed', () => {
   assert.ok(d.matches.every((m) => m.legend === 'Sparrow'));
-  assert.deepEqual([...new Set(d.matches.map((m) => m.map))].sort(), ['Broken Moon', "World's Edge"]);
+  assert.deepEqual([...new Set(d.matches.map((m) => m.map))].sort(), ['Broken Moon', 'Olympus', "World's Edge"]);
   assert.ok(d.teammates.every((t) => t.legend !== 'Unknown'));
 });
 
@@ -49,7 +49,7 @@ test('real: teammates are keyed on their platform ID, with the friend kept by na
   assert.ok(d.matches.every((m) => m.squadKey.split('|').length === 2));
   const friend = d.players.find((p) => p.name.includes('santoznma'));
   assert.ok(friend);
-  assert.equal(d.teammates.filter((t) => t.playerKey === friend.playerKey).length, 18);
+  assert.equal(d.teammates.filter((t) => t.playerKey === friend.playerKey).length, 31);
 });
 
 test('real: RP change per match comes from the season stats snapshots', () => {
