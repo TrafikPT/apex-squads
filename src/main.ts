@@ -8,6 +8,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import type { OverwolfGameEventPackage } from '@overwolf/ow-electron-packages-types';
 import { AccountIdFile } from './account-ids';
+import { dataDir } from './data-dir';
 import { JsonlSink } from './jsonl-sink';
 import { PlayerHistory } from './player-history';
 import { PopupService } from './popup-service';
@@ -26,9 +27,7 @@ function log(...args: unknown[]): void {
 
 const startedAt = new Date();
 const sessionId = `${startedAt.toISOString().replace(/[:.]/g, '-')}_${crypto.randomBytes(3).toString('hex')}`;
-const dataDir =
-  process.env.APEX_TRACKER_DATA_DIR || path.join(app.getPath('documents'), 'ApexTracker');
-const recordingsDir = path.join(dataDir, 'recordings');
+const recordingsDir = path.join(dataDir(), 'recordings');
 
 // Everything met in earlier sessions, for the popups' history (met before, K/D).
 const history = new PlayerHistory();
@@ -46,7 +45,7 @@ const tee: Sink = {
   },
 };
 // My EA ID per account, so the lobby's RP lookup works before the first match.
-const recorder = new Recorder(sessionId, tee, rankClient, systemClock, new AccountIdFile(path.join(dataDir, 'accounts.json')));
+const recorder = new Recorder(sessionId, tee, rankClient, systemClock, new AccountIdFile(path.join(dataDir(), 'accounts.json')));
 const popupWindow = new PopupWindow();
 popups = new PopupService({
   history,

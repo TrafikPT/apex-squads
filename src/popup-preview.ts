@@ -3,13 +3,14 @@
  * the history built from the recordings before it. `npm run popup:preview`;
  * works on macOS.
  *
- *   APEX_RECORDINGS_DIR   recordings to use (default: fixtures/recordings)
+ *   APEX_RECORDINGS_DIR   recordings to use (default: the app's, Documents\ApexTracker\recordings)
  *   APEX_REPLAY_MATCH     match id to replay (default: the latest with popups)
  *   APEX_UI_SCREENSHOT    folder: save each popup as popup-N.png, then quit
  */
 import { app } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
+import { recordingsToShow } from './data-dir';
 import { PlayerHistory } from './player-history';
 import { describePopup, PopupService } from './popup-service';
 import { PopupWindow } from './popup-window';
@@ -18,7 +19,7 @@ import type { Popup } from './ui/popup-card';
 
 const GAP_MS = 4000;
 
-const recordings = process.env.APEX_RECORDINGS_DIR || path.join(__dirname, '..', 'fixtures', 'recordings');
+const recordings = recordingsToShow();
 const lines = readRecordings([recordings]);
 
 /** Every popup the recordings produce, per match, in order. */

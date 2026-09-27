@@ -9,9 +9,13 @@ dashboard's stats are computed from those files in the app
 
 ### One-time setup
 1. Install **Node.js 22.12 or newer** (LTS) and **Git** for Windows.
-2. Get **Overwolf Dev Mode credentials**. You need an approved Overwolf
-   developer account; see DESIGN.md §10. Then go to Developer Console →
-   Settings → Profile → "Revoke and get new API key".
+2. Get an **Overwolf Developer Key**. You need an approved Overwolf
+   developer account (DESIGN.md §10). Log in on https://dev.overwolf.com,
+   open your profile (top right) → **Developer Key**, and copy it into
+   `OW_DEV_KEY` in `.env`. It expires every 14 days: press **Extend** there
+   (possible from 2 days before). An expired key fails with "invalid
+   verification" at start. (The Console's `OW_CLI_EMAIL` + `OW_CLI_API_KEY`
+   pair is the other option; it didn't verify for us.)
 3. Get an **apexlegendsstatus API key** from the developer portal linked on
    https://apexlegendsapi.com/ (free). Optional: without it, RP isn't recorded.
 4. In Apex: **Settings → Gameplay → Obituaries: On**. The kill feed, and so
@@ -33,8 +37,13 @@ Leave the window open, then launch Apex. You should see
 If it logs "runs as administrator", start PowerShell with "Run as
 administrator" and run `npm start` again.
 
+The app brings its own Overwolf packages: the Overwolf client isn't needed.
+Don't run the client alongside it: closing the client mid-session stopped our
+app's game events (2026-09-27).
+
 Recordings are saved to `Documents\ApexTracker\recordings\`, one `.jsonl`
-file per session.
+file per session. The dashboard and `app:preview` show them, and my EA ID per
+account is kept in `Documents\ApexTracker\accounts.json` for RP lookups.
 
 ## Look at the data (Mac or Windows)
 Copy the `.jsonl` files into this repo's `recordings/` folder, then from the
@@ -76,10 +85,11 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
 npm run app:preview     # the app window, without Overwolf (works on macOS)
 npm run ui:watch        # rebuild the UI on save; reload the window with Cmd/Ctrl+R
 ```
-The preview shows the real (anonymized) matches in `fixtures/recordings/`.
-`APEX_RECORDINGS_DIR=<folder>` points it at other recordings, and
-`APEX_UI_QUERY="data=sample"` shows the generated sample data instead. The
-real app (`npm start`) shows what it recorded, or sample data until then.
+The preview shows what the app has recorded (`Documents\ApexTracker\recordings\`),
+like `npm start` does. `APEX_RECORDINGS_DIR=<folder>` points it at other
+recordings (`fixtures/recordings` has the anonymized ones in git, for tests
+and for working on the UI on another machine), and
+`APEX_UI_QUERY="data=sample"` shows the generated sample data instead.
 
 ## Popups (kill/death and lobby cards)
 ```bash
@@ -88,8 +98,9 @@ npm run popup:preview   # replays your latest recorded match's popups, 4 s apart
 `APEX_REPLAY_MATCH=<match id>` picks another match. The cards use only the
 recordings (no API key needed); see DESIGN.md §12.
 
-### Live, before our app can use GEP
-While another Apex app (e.g. TRN's tracker) runs, the Overwolf client logs
+### Live, from the Overwolf client's log (before we had Dev Mode)
+Superseded by `npm start`; kept for replaying old logs. While another Apex
+app (e.g. TRN's tracker) runs, the Overwolf client logs
 every game event. This follows that log and shows the cards as you play:
 ```powershell
 npm run popup:live
