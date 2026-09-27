@@ -3,6 +3,7 @@
  * anywhere. It lands every GEP message untouched as one JSONL line and adds
  * only two things: the current match id, and RP snapshots taken in the lobby.
  */
+import { baseName } from './game-names';
 
 export const APEX_GAME_ID = 21566;
 
@@ -193,7 +194,8 @@ export class Recorder {
     if (!this.rank || (!playerName && !playerUid)) return;
     const base = { trigger, player_name: playerName, player_uid: playerUid };
     try {
-      const { status, body } = await this.rank.fetchPlayer(playerUid ? { uid: playerUid } : { name: playerName! });
+      // By name only until the roster gives my ID (in the lobby); the API knows me without my clan tag.
+      const { status, body } = await this.rank.fetchPlayer(playerUid ? { uid: playerUid } : { name: baseName(playerName!) });
       this.write('rp_snapshot', { feature: null, key: trigger, value: { ...base, status, body } });
     } catch (err) {
       this.write('rp_snapshot', {

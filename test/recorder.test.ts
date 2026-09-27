@@ -103,6 +103,14 @@ test('lines are sequential and keep the raw payload untouched', () => {
   assert.equal(sink.lines[0].received_at, '2026-09-23T20:00:00.000Z');
 });
 
+test('an RP lookup by name drops the clan tag: the API only knows the bare name', async () => {
+  const { rank, name, phase } = setup();
+  phase('lobby');
+  name('[SOY] MiracleOfFatima');
+  await flush();
+  assert.deepEqual(rank.calls, ['MiracleOfFatima']);
+});
+
 test('lines are tagged with the match id until back in the lobby', () => {
   const { sink, recorder, phase, matchId } = setup();
   phase('loading_screen');
