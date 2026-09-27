@@ -44,6 +44,16 @@ export interface RankFetcher {
   fetchPlayer(query: PlayerQuery): Promise<{ status: number; body: unknown }>;
 }
 
+/**
+ * Each of my accounts' EA ID, kept between sessions: the roster only reveals
+ * it in a match, and without it the lobby's RP lookup goes by name, which the
+ * API rarely finds. Keyed by name without the clan tag.
+ */
+export interface AccountIds {
+  get(name: string): string | null;
+  set(name: string, uid: string): void;
+}
+
 export interface GepMessage {
   feature: string;
   category?: string;
@@ -92,6 +102,7 @@ export class Recorder {
     private readonly sink: Sink,
     private readonly rank: RankFetcher | null,
     private readonly clock: Clock = systemClock,
+    private readonly ids: AccountIds | null = null,
   ) {}
 
   onInfoUpdate(msg: GepMessage): void {
@@ -165,6 +176,10 @@ export class Recorder {
     if (!name || name === this.playerName) return;
     const isSwitch = this.playerName !== null;
     this.playerName = name;
+    const saved = this.ids?.get(baseName(name)) ?? null;
+    // Another account: the last one's ID no longer applies.
+    if (isSwitch) this.playerUid = saved;
+    else this.playerUid ??= saved;
     if (this.phase === 'lobby') {
       void this.snapshotRp(isSwitch ? 'account_change' : 'lobby');
     }
@@ -178,9 +193,12 @@ export class Recorder {
       return;
     }
     if (!p || typeof p !== 'object') return;
-    const r = p as { is_local?: unknown; origin_id?: unknown; platform_id?: unknown };
+    const r = p as { is_local?: unknown; origin_id?: unknown; platform_id?: unknown; name?: unknown };
     const uid = r.origin_id || r.platform_id;
-    if ((r.is_local === '1' || r.is_local === true) && typeof uid === 'string' && uid) this.playerUid = uid;
+    if (!(r.is_local === '1' || r.is_local === true) || typeof uid !== 'string' || !uid) return;
+    this.playerUid = uid;
+    const name = typeof r.name === 'string' && r.name ? r.name : this.playerName;
+    if (name) this.ids?.set(baseName(name), uid);
   }
 
   private cancelPendingRp(): void {

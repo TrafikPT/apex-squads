@@ -3,8 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { AccountIdFile } from '../src/account-ids';
 import { JsonlSink } from '../src/jsonl-sink';
 import {
+  AccountIds,
   Clock,
   POST_MATCH_DELAYS_S,
   PlayerQuery,
@@ -68,11 +70,21 @@ class FakeRank implements RankFetcher {
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
-function setup() {
+class MemoryIds implements AccountIds {
+  constructor(readonly ids: Record<string, string> = {}) {}
+  get(name: string) {
+    return this.ids[name] ?? null;
+  }
+  set(name: string, uid: string) {
+    this.ids[name] = uid;
+  }
+}
+
+function setup(ids: AccountIds | null = null) {
   const sink = new MemorySink();
   const clock = new FakeClock();
   const rank = new FakeRank();
-  const recorder = new Recorder('s1', sink, rank, clock);
+  const recorder = new Recorder('s1', sink, rank, clock, ids);
   const phase = (value: string) =>
     recorder.onInfoUpdate({ feature: 'game_info', category: 'game_info', key: 'phase', value });
   const name = (value: string) =>
@@ -109,6 +121,43 @@ test('an RP lookup by name drops the clan tag: the API only knows the bare name'
   name('[SOY] MiracleOfFatima');
   await flush();
   assert.deepEqual(rank.calls, ['MiracleOfFatima']);
+});
+
+const localRoster = (name: string, originId: string) => ({
+  feature: 'roster', category: 'match_info', key: 'roster_0',
+  value: JSON.stringify({ name, is_local: '1', platform_id: '765', origin_id: originId }),
+});
+
+test("a saved EA ID makes the session's first lobby lookup go by ID", async () => {
+  const { rank, name, phase } = setup(new MemoryIds({ MiracleOfFatima: '101' }));
+  phase('lobby');
+  name('[SOY] MiracleOfFatima');
+  await flush();
+  assert.deepEqual(rank.calls, ['uid:101']);
+});
+
+test("the match roster saves my EA ID under my name without the clan tag", () => {
+  const ids = new MemoryIds();
+  const { recorder } = setup(ids);
+  recorder.onInfoUpdate(localRoster('[SOY] MiracleOfFatima', '101'));
+  assert.deepEqual(ids.ids, { MiracleOfFatima: '101' });
+});
+
+test("switching accounts doesn't keep the last account's EA ID", async () => {
+  const { rank, recorder, name, phase } = setup(new MemoryIds());
+  phase('lobby');
+  name('[SOY] Main');
+  recorder.onInfoUpdate(localRoster('[SOY] Main', '101'));
+  name('Alt');
+  await flush();
+  assert.equal(rank.calls.at(-1), 'Alt');
+});
+
+test('the EA ID file survives a restart, and a missing file starts empty', () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ids-')), 'accounts.json');
+  assert.equal(new AccountIdFile(file).get('MiracleOfFatima'), null);
+  new AccountIdFile(file).set('MiracleOfFatima', '101');
+  assert.equal(new AccountIdFile(file).get('MiracleOfFatima'), '101');
 });
 
 test('lines are tagged with the match id until back in the lobby', () => {

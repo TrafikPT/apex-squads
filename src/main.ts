@@ -7,13 +7,14 @@ import { app } from 'electron';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import type { OverwolfGameEventPackage } from '@overwolf/ow-electron-packages-types';
+import { AccountIdFile } from './account-ids';
 import { JsonlSink } from './jsonl-sink';
 import { PlayerHistory } from './player-history';
 import { PopupService } from './popup-service';
 import { PopupWindow } from './popup-window';
 import { ApexStatusClient } from './rank-client';
 import { readRecordings } from './recordings';
-import { APEX_GAME_ID, Recorder, type Sink } from './recorder';
+import { APEX_GAME_ID, Recorder, systemClock, type Sink } from './recorder';
 import { createMainWindow } from './window';
 
 const SET_FEATURES_ATTEMPTS = 10;
@@ -44,7 +45,8 @@ const tee: Sink = {
     popups?.onLine(line);
   },
 };
-const recorder = new Recorder(sessionId, tee, rankClient);
+// My EA ID per account, so the lobby's RP lookup works before the first match.
+const recorder = new Recorder(sessionId, tee, rankClient, systemClock, new AccountIdFile(path.join(dataDir, 'accounts.json')));
 const popupWindow = new PopupWindow();
 popups = new PopupService({
   history,
