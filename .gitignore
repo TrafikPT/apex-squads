@@ -5,3 +5,4 @@ dist-test/
 *.log
 /recordings/
 ui/dist/
+/release/

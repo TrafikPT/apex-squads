@@ -1,0 +1,20 @@
+Apex Squads: Terms of Use and Privacy Policy
+
+To install and use Apex Squads you must accept its Terms of Use and Privacy Policy:
+
+  Terms of Use:   [TERMS URL]
+  Privacy Policy: [PRIVACY POLICY URL]
+
+In short:
+
+- Apex Squads records the game events that Overwolf provides while you play Apex
+  Legends and keeps them on this PC only, in %APPDATA%\Apex Squads. It doesn't
+  upload your matches anywhere.
+- The recordings include other players' in-game names and IDs that the game shows
+  you. Keep them for your own use and don't share them.
+- The app runs on Overwolf's platform; Overwolf's own terms and privacy policy
+  apply to its services.
+- Apex Squads is not endorsed by or affiliated with Electronic Arts or its
+  licensors.
+
+Click "I Agree" to accept the Terms of Use and the Privacy Policy and continue.

@@ -1,0 +1,58 @@
+# Packaging for Windows with @overwolf/ow-electron-builder (docs/overwolf/setup-and-release.md
+# §6-7; the builder's options are read from its source, the docs don't list them).
+# `npm run dist:unsigned` checks the packaging; `npm run dist` is the signed release build.
+#
+# The Overwolf app UID comes from package.json's productName + author.name, not from
+# anything here: keep those two as they are (QA checks they never change).
+
+# Windows' AppUserModelID (taskbar grouping, notifications). Not the Overwolf UID.
+appId: com.trafikpt.apexsquads
+
+directories:
+  output: release
+  buildResources: build
+
+# Only what the app loads at runtime (paths in src/window.ts, popup-window.ts, tray.ts).
+# No node_modules: the app has no runtime dependencies (fonts are bundled by esbuild).
+files:
+  - package.json
+  - dist/**/*.js
+  # Dev entry points and the fake overlay: not part of the app.
+  - "!dist/{preview-main,popup-preview,live-popups,import-gep-log,overlay-check,fake-overlay}.js"
+  - ui/index.html
+  - ui/popup.html
+  - ui/dist/**/*
+  - ui/assets/**/*
+
+win:
+  target:
+    - target: nsis
+      arch: x64
+  icon: build/icon.ico
+  # Never elevated: an app running as administrator can't put its overlay into a game
+  # that isn't (setup-and-release.md, "What this means" 9).
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  # An assisted installer, so it can show the terms page (QA: "your installer should
+  # ask users to accept a Terms of Use or a Privacy Policy").
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  license: build/license.txt
+  shortcutName: Apex Squads
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  # Recordings stay in %APPDATA%\Apex Squads after uninstalling (the Privacy Policy
+  # draft has this as an open [DOES / DOES NOT]); true would delete them.
+  deleteAppDataOnUninstall: false
+  artifactName: Apex-Squads-Setup-${version}.${ext}
+
+overwolf:
+  # Overwolf signing (OW_CLI_EMAIL, OW_CLI_API_KEY, OW_BUILD_KEY) is required by default
+  # and the build fails without it. Off here so dist:unsigned can check the packaging;
+  # `npm run dist` sets OW_REQUIRE_SIGNING=1, which turns it back on.
+  requireSigning: false
+  # enableOWCertSigning: true would have Overwolf sign the exe with its own certificate,
+  # if its signing service enables that for the app. Ask DevRel before buying one
+  # (docs/next-steps.md item 2).

@@ -151,3 +151,26 @@ Launching Electron from VS Code's terminal on Windows can fail with
 `Cannot read properties of undefined (reading 'whenReady')`: VS Code sets
 `ELECTRON_RUN_AS_NODE`. Clear it first (`Remove-Item Env:ELECTRON_RUN_AS_NODE`;
 on macOS, prefix the command with `env -u ELECTRON_RUN_AS_NODE`).
+
+## Packaging (Windows installer)
+```bash
+npm run dist:unsigned   # release/Apex-Squads-Setup-<version>.exe, unsigned; works on macOS too
+npm run dist            # the signed release build
+```
+Settings are in `electron-builder.yml` (`@overwolf/ow-electron-builder`, which
+packages `@overwolf/ow-electron`, not the `electron` the previews use). The
+installer shows `build/license.txt` for the user to accept the Terms of Use and
+Privacy Policy; `npm run dist` refuses to build while it still has [PLACEHOLDERS].
+
+An unsigned build is only for checking the packaging, the installer and the
+tray/start-with-Windows behaviour: Overwolf's packages (GEP, overlay) don't load in
+it, so it records nothing. A release needs two signatures
+(docs/overwolf/setup-and-release.md §6):
+- **Overwolf's**, done by the builder: `OW_CLI_EMAIL`, `OW_CLI_API_KEY` and
+  `OW_BUILD_KEY` in `.env` (from the Developer Console). `npm run dist` fails
+  without them.
+- **Ours on the exe**, standard electron-builder: `CSC_LINK` and
+  `CSC_KEY_PASSWORD` for a certificate file, or `win.azureSignOptions` in
+  `electron-builder.yml` for Azure. Or, if Overwolf enables it for the app,
+  `overwolf.enableOWCertSigning: true` has Overwolf sign it with its own
+  certificate (an open question for DevRel).

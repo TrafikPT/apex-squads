@@ -23,6 +23,9 @@ The list is in [overwolf/README.md](overwolf/README.md#open-questions-ask-devrel
   the day after): packaged builds whose UID isn't approved get no GEP. Send from
   the email used on the app idea form.
 - How the first ow-electron QA build gets Overwolf-signed without `OW_BUILD_KEY`.
+- Builder 26.9.3 can sign the exe with Overwolf's own certificate
+  (`overwolf.enableOWCertSigning`, when "the Overwolf signing service" enables it
+  for the app). Is Apex Squads eligible, so we don't need to buy a certificate?
 - Does QA expect the app to start when Apex launches ("no launch events")?
 - Can a friend alpha-test with my Developer Key until I have Console access, or
   should he apply for his own? (Discord: Dev Mode needs an approved developer
@@ -132,14 +135,19 @@ Order within this block is flexible. Submission form: https://wkf.ms/3KL8b1m.
   - what contact details an individual developer must publish;
   - how long recordings sent with problem reports are kept (they hold other
     players' data).
-- **Packaging and signing:** point the builder's `win.icon` at `build/icon.ico`,
-  and upload `build/store-icon-55.png` as the store listing's app icon.
-  `@overwolf/ow-electron-builder` 26.9.2, the Overwolf
-  installer (ask developers@overwolf.com), and our own code-signing certificate for
-  both the installer and the exe: Azure about $10/month if it accepts individuals
-  in Portugal (and the builder has its signing queue), otherwise about $500/year
-  (overwolf/setup-and-release.md §6-7). How to sign the first QA build before
-  having the Console is an open question for DevRel.
+- **Packaging and signing.** Set up 2026-09-28 (README "Packaging"):
+  `@overwolf/ow-electron-builder` 26.9.3 with `electron-builder.yml`, an NSIS
+  installer with the exe icon and a terms page (`build/license.txt`: fill in the
+  Terms and Privacy URLs; `npm run dist` refuses placeholders).
+  `npm run dist:unsigned` builds a 108 MB installer on macOS. Still to do:
+  - run the unsigned installer on Windows: install, the terms page, shortcuts,
+    icon, tray, "Start with Windows" and a reboot, uninstall (the recordings stay);
+  - our exe signature: our own certificate (Azure about $10/month if it accepts
+    individuals in Portugal and the builder has its signing queue, otherwise about
+    $500/year), **unless** Overwolf signs it for us: builder 26.9.3 can
+    (`overwolf.enableOWCertSigning`, item 2);
+  - Overwolf installer or ours (ask developers@overwolf.com);
+  - upload `build/store-icon-55.png` as the store listing's app icon.
 - **Test the packaged, signed build on a clean PC**: GEP events arrive, and
   `owpm.log` shows real package versions, not `0/0.0.0` stubs.
 - **QA takes weeks** (staff admitted a backlog; members waited 4 weeks to 80+
