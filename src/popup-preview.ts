@@ -3,7 +3,7 @@
  * the history built from the recordings before it. `npm run popup:preview`;
  * works on macOS.
  *
- *   APEX_RECORDINGS_DIR   recordings to use (default: the app's, Documents\ApexTracker\recordings)
+ *   APEX_RECORDINGS_DIR   recordings to use (default: the app's, %APPDATA%\Apex Squads\recordings)
  *   APEX_REPLAY_MATCH     match id to replay (default: the latest with popups)
  *   APEX_UI_SCREENSHOT    folder: save each popup as popup-N.png, then quit
  */

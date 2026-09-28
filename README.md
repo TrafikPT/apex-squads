@@ -41,9 +41,9 @@ The app brings its own Overwolf packages: the Overwolf client isn't needed.
 Don't run the client alongside it: closing the client mid-session stopped our
 app's game events (2026-09-27).
 
-Recordings are saved to `Documents\ApexTracker\recordings\`, one `.jsonl`
+Recordings are saved to `%APPDATA%\Apex Squads\recordings\`, one `.jsonl`
 file per session. The dashboard and `app:preview` show them, and my EA ID per
-account is kept in `Documents\ApexTracker\accounts.json` for RP lookups.
+account is kept in `%APPDATA%\Apex Squads\accounts.json` for RP lookups.
 
 ## Look at the data (Mac or Windows)
 Copy the `.jsonl` files into this repo's `recordings/` folder, then from the
@@ -85,7 +85,7 @@ CI (`.github/workflows/ci.yml`) runs all of these on every push.
 npm run app:preview     # the app window, without Overwolf (works on macOS)
 npm run ui:watch        # rebuild the UI on save; reload the window with Cmd/Ctrl+R
 ```
-The preview shows what the app has recorded (`Documents\ApexTracker\recordings\`),
+The preview shows what the app has recorded (`%APPDATA%\Apex Squads\recordings\`),
 like `npm start` does. `APEX_RECORDINGS_DIR=<folder>` points it at other
 recordings (`fixtures/recordings` has the anonymized ones in git, for tests
 and for working on the UI on another machine), and

@@ -721,7 +721,7 @@ Overwolf's overlay replaces it once the app is approved.
 | Matches | **Third parties** (try it, then decide): a death where I'd been damaging squad A and was knocked by squad B within a short window. A heuristic: check on real matches before showing it |
 | Settings | Diagnostics: recent `lifecycle` errors, GEP feature status. Maybe: ranked games not recorded, from the `games` count in `player_stats` (7 on 24 Sept) |
 | Settings | Obituaries check: warn when a match has no `kill_feed` lines |
-| Settings | Choose the recordings folder (e.g. a OneDrive folder, for backup and several PCs). `main.ts` already reads `APEX_TRACKER_DATA_DIR` |
+| Settings | Choose the recordings folder (e.g. a OneDrive folder, for backup and several PCs). `main.ts` already reads `APEX_SQUADS_DATA_DIR` (default `%APPDATA%\Apex Squads`, the app's userData folder as in Overwolf's storage guide; moved from `Documents\ApexTracker` on 2026-09-28) |
 | Settings | CSV export of the gold facts |
 
 ### After the spike (needs `location`, §7 Q11)

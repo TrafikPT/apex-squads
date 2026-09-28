@@ -22,7 +22,7 @@ something there looks out of date, and update the files and their date.
 
 ## Rules
 - Real recordings contain other players' names and IDs: they stay out of git
-  (`recordings/` is ignored; the app writes to `Documents\ApexTracker\`). Only
+  (`recordings/` is ignored; the app writes to `%APPDATA%\Apex Squads\`). Only
   anonymized recordings go in `fixtures/recordings/`: anonymize all sessions in one run
   so aliases stay consistent, and check the existing fixture files come out unchanged.
 - Never read, print or commit `.env` values (Overwolf and apexlegendsstatus keys).
