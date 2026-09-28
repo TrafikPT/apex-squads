@@ -253,8 +253,18 @@ function welcomeDialog(): HTMLElement {
 // ---------------------------------------------------------------- title bar
 
 function titleBar(): HTMLElement {
-  const mark = svgEl('svg', { class: 'mark', viewBox: '0 0 24 24' });
-  mark.append(svgEl('path', { d: 'M12 2 22 21H2z', fill: 'var(--accent)' }), svgEl('path', { d: 'M12 10l4 8H8z', fill: 'var(--page)' }));
+  // The app icon (build/icon.svg): keep the shapes in step with it.
+  const mark = svgEl('svg', { class: 'mark', viewBox: '0 0 64 64' });
+  const you = svgEl('g', { fill: '#ffffff', stroke: 'var(--accent)', 'stroke-width': '7', 'paint-order': 'stroke', 'stroke-linejoin': 'round' });
+  you.append(svgEl('circle', { cx: '32', cy: '27', r: '8' }), svgEl('path', { d: 'M17 52 C17 43 23 38.5 32 38.5 C41 38.5 47 43 47 52 Z' }));
+  mark.append(
+    svgEl('rect', { width: '64', height: '64', rx: '14', fill: 'var(--accent)' }),
+    svgEl('circle', { cx: '20', cy: '19', r: '6.5', fill: '#16171a' }),
+    svgEl('path', { d: 'M8 42 C8 33 13 29 20 29 C27 29 32 33 32 42 Z', fill: '#16171a' }),
+    svgEl('circle', { cx: '44', cy: '19', r: '6.5', fill: '#16171a' }),
+    svgEl('path', { d: 'M32 42 C32 33 37 29 44 29 C51 29 56 33 56 42 Z', fill: '#16171a' }),
+    you,
+  );
   return el('header', { class: 'titlebar' },
     mark,
     el('span', { class: 'name' }, 'Apex Squads'),

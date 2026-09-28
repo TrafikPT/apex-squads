@@ -33,7 +33,7 @@ npm start
 Then launch Apex. You should see `Apex Legends detected` and
 `Subscribed to all features; Apex supports N: ...`, followed by `Phase: ...`
 lines as you queue and play. Closing the window keeps the app recording in the
-tray (orange icon): its menu reopens the dashboard or quits. Ctrl+C also stops it.
+tray: its menu reopens the dashboard or quits. Ctrl+C also stops it.
 An installed build can start with Windows from the tray menu, in the tray.
 
 If it logs "runs as administrator", start PowerShell with "Run as
@@ -81,6 +81,11 @@ npm run lint     # ESLint; style otherwise follows .editorconfig (no Prettier)
 npm run ui:check # type-check the dashboard
 ```
 CI (`.github/workflows/ci.yml`) runs all of these on every push.
+
+The app icon's source is `build/icon.svg`. After changing it, `npm run icons`
+redraws every icon file from it: `build/icon.ico` (exe and installer),
+`build/icon.png`, `build/store-icon-55.png` (Overwolf store listing) and the tray
+and window icons in `ui/assets/icon/`. The title bar's copy is in `src/ui/app.ts`.
 
 ## Dashboard
 ```bash

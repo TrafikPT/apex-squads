@@ -25,7 +25,8 @@
     "popup:preview": "npm run build && npm run ui:build && electron dist/popup-preview.js",
     "popup:live": "npm run build && npm run ui:build && electron dist/live-popups.js",
     "lint": "eslint .",
-    "import:gep-log": "npm run build && node dist/import-gep-log.js"
+    "import:gep-log": "npm run build && node dist/import-gep-log.js",
+    "icons": "electron scripts/build-icons.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

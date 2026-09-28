@@ -544,7 +544,9 @@ Still open for our own recorder: 4–9, 11, and 1–3 re-checked on our data.
   `--hidden`. Overwolf staff advise exactly this for apps that miss events when
   started after the game. Not done: opening the dashboard when Apex launches, which
   would take focus from the game as it starts; the cards cover the in-game side.
-  The tray icon is a drawn placeholder until the app has an icon.
+  The app icon (2026-09-28) is "Trio": two teammates behind, you in front in white, on
+  the accent orange; chosen over seven other concepts because it says "squads" at 16 px
+  and looks nothing like Apex's own logo. Source `build/icon.svg`, files by `npm run icons`.
 - **Overlay tech** (phase 3): not designed yet.
 - **Legend portraits** (resolved 2026-09-24): EA's content policy lets fans
   use original characters in free, personal projects, provided assets aren't

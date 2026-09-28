@@ -77,6 +77,8 @@ export function createMainWindow(recordingsDirs: string[]): BrowserWindow {
     minWidth: 1100,
     minHeight: 680,
     title: 'Apex Squads',
+    // Installed builds show the exe's icon; this covers dev runs (npm run icons).
+    icon: path.join(__dirname, '..', 'ui', 'assets', 'icon', 'window.png'),
     backgroundColor: BACKGROUND,
     show: false,
     titleBarStyle: 'hidden',

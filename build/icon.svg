@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512">
+  <!-- Apex Squads app icon ("Trio"): two teammates behind, you in front.
+       The source for every icon file: run `npm run icons` after changing it.
+       src/ui/app.ts draws the same shapes in the title bar; keep them in step. -->
+  <rect width="64" height="64" rx="14" fill="#e8542a"/>
+  <circle cx="20" cy="19" r="6.5" fill="#16171a"/>
+  <path d="M8 42 C8 33 13 29 20 29 C27 29 32 33 32 42 Z" fill="#16171a"/>
+  <circle cx="44" cy="19" r="6.5" fill="#16171a"/>
+  <path d="M32 42 C32 33 37 29 44 29 C51 29 56 33 56 42 Z" fill="#16171a"/>
+  <g fill="#ffffff" stroke="#e8542a" stroke-width="7" paint-order="stroke" stroke-linejoin="round">
+    <circle cx="32" cy="27" r="8"/>
+    <path d="M17 52 C17 43 23 38.5 32 38.5 C41 38.5 47 43 47 52 Z"/>
+  </g>
+</svg>

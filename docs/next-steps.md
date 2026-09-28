@@ -99,10 +99,12 @@ Order within this block is flexible. Submission form: https://wkf.ms/3KL8b1m.
   installed app and test "Start with Windows" (it only works when packaged)
   including a reboot; decide whether anything should open when Apex launches
   (QA flagged an electron app for "no launch events"; opening the dashboard would
-  take focus from the game); a real app icon (tray, installer, window).
+  take focus from the game).
 - **Terms of Use and Privacy Policy** on public URLs without login; the
   installer must ask users to accept them.
-- **Packaging and signing:** `@overwolf/ow-electron-builder` 26.9.2, the Overwolf
+- **Packaging and signing:** point the builder's `win.icon` at `build/icon.ico`,
+  and upload `build/store-icon-55.png` as the store listing's app icon.
+  `@overwolf/ow-electron-builder` 26.9.2, the Overwolf
   installer (ask developers@overwolf.com), and our own code-signing certificate for
   both the installer and the exe: Azure about $10/month if it accepts individuals
   in Portugal (and the builder has its signing queue), otherwise about $500/year
@@ -131,6 +133,8 @@ Order within this block is flexible. Submission form: https://wkf.ms/3KL8b1m.
   delete when no longer needed.
 
 ## Done
+- 2026-09-28: app icon "Trio" (build/icon.svg, `npm run icons`) in the tray, window
+  and title bar.
 - 2026-09-28: first-run welcome (skippable, reopened from Help), a notice over the
   sample data until the first match, and a Help page (getting started, FAQ,
   release notes, open the recordings folder).
