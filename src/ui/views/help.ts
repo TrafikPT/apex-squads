@@ -12,8 +12,11 @@ const FAQ: [string, string][] = [
     'A match counts once it ends; one you leave early may be left out. After an Apex update, Overwolf sometimes pauses ' +
     'its game data for Apex for a while, and matches played then can\'t be recorded.'],
   ["The kill and death cards don't show over the game.",
-    'For now the cards are separate windows, which Windows shows over Apex only in borderless window mode ' +
-    '(Apex: Settings → Video → Display Mode). Which cards show, where and for how long is in Settings.'],
+    'The cards show inside the game through Overwolf\'s overlay, a few seconds after Apex starts. If the overlay ' +
+    "can't get into Apex (for example when Apex runs as administrator, or while Overwolf has Apex's overlay switched " +
+    'off), the cards are a separate window instead, which Windows shows over Apex only in borderless window mode ' +
+    '(Apex: Settings → Video → Display Mode). Also check the cards aren\'t turned off with the hotkey (F10 by ' +
+    'default). Which cards show, where, for how long and the hotkeys are in Settings.'],
   ['Why do some players show as a legend name and four digits?',
     "They play with Apex's anonymous mode on. The game hides who they are, and Apex Squads doesn't try to find out."],
   ['Why does some RP say "estimate"?',
@@ -33,7 +36,8 @@ const RELEASES: { version: string; date: string; notes: string[] }[] = [
       'Overview: your rank, RP match by match, the last session and recent matches.',
       'Squads, Weapons, Legends and Matches: how you do with whom, with what, and in every match.',
       'Seasons: your rank and totals season by season, from the game\'s own stats.',
-      'Kill, death and lobby cards during matches, with settings for which show, where and for how long.',
+      'Kill, death and lobby cards during matches, inside the game, with settings for which show, where and for how long.',
+      'Hotkeys: F9 hides a card, F10 turns cards off and on; change them in Settings.',
     ],
   },
 ];

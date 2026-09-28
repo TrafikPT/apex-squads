@@ -10,6 +10,8 @@ import path from 'node:path';
 import type { OverwolfGameEventPackage } from '@overwolf/ow-electron-packages-types';
 import { AccountIdFile } from './account-ids';
 import { dataDir } from './data-dir';
+import { GameOverlay } from './game-overlay';
+import { Hotkeys } from './hotkeys';
 import { JsonlSink } from './jsonl-sink';
 import { PlayerHistory } from './player-history';
 import { PopupService } from './popup-service';
@@ -17,6 +19,7 @@ import { PopupWindow } from './popup-window';
 import { ApexStatusClient } from './rank-client';
 import { readRecordings } from './recordings';
 import { APEX_GAME_ID, Recorder, systemClock, type Sink } from './recorder';
+import { loadSettings, onSettingsSaved } from './settings-store';
 import { createTray, startedHidden } from './tray';
 import { createMainWindow } from './window';
 
@@ -48,7 +51,9 @@ const tee: Sink = {
 };
 // My EA ID per account, so the lobby's RP lookup works before the first match.
 const recorder = new Recorder(sessionId, tee, rankClient, systemClock, new AccountIdFile(path.join(dataDir(), 'accounts.json')));
-const popupWindow = new PopupWindow();
+// The cards go inside the game once Overwolf's overlay is in it; a plain window until then.
+const overlay = new GameOverlay(log);
+const popupWindow = new PopupWindow(overlay);
 popups = new PopupService({
   history,
   show: (popup) => {
@@ -76,6 +81,7 @@ if (!app.requestSingleInstanceLock()) {
     log(`Overwolf package ready: ${packageName} ${version}`);
     recorder.lifecycle('package_ready', { package: packageName, version });
     if (packageName === 'gep') setupGep(app.overwolf.packages.gep);
+    if (packageName === 'overlay') overlay.attach(app.overwolf.packages.overlay);
   });
   app.overwolf.packages.on('failed-to-initialize', (_e, packageName) => {
     log(`Overwolf package FAILED to initialize: ${packageName}`);
@@ -90,6 +96,13 @@ if (!app.requestSingleInstanceLock()) {
     createTray({ openDashboard, quit: () => app.quit() });
     // Started by the login item: wait in the tray until the user opens the dashboard.
     if (!startedHidden()) openDashboard();
+    // Hotkeys follow the settings, and move into the game with the overlay and back out.
+    const hotkeys = new Hotkeys(overlay, { hideCard: () => popupWindow.hideNow(), toggleCards: () => popupWindow.toggleCards() }, log);
+    hotkeys.apply(loadSettings());
+    onSettingsSaved((settings) => hotkeys.apply(settings));
+    overlay.onGameInjected(() => hotkeys.apply(loadSettings()));
+    overlay.onGameExit(() => hotkeys.apply(loadSettings()));
+    app.on('will-quit', () => hotkeys.clear());
   });
   // Launching the app again (e.g. its desktop icon) while it runs in the tray.
   app.on('second-instance', () => openDashboard());
@@ -111,7 +124,7 @@ function openDashboard(): void {
     dashboard.focus();
     return;
   }
-  dashboard = createMainWindow([recordingsDir]);
+  dashboard = createMainWindow([recordingsDir], popupWindow);
 }
 
 function setupGep(gep: OverwolfGameEventPackage): void {

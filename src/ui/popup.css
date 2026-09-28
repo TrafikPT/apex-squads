@@ -55,3 +55,7 @@ body.anchor-bottom { height: 100vh; display: flex; flex-direction: column; justi
 .lobby-player { margin-top: 6px; }
 .lobby-player .who { font: 700 17px/1.2 var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lobby-player .history { margin-top: 0; }
+.card.notice { border-left-color: var(--text-muted); }
+.notice .moment { color: var(--text-muted); }
+.notice-text { font: 700 17px/1.25 var(--font-display); margin-top: 4px; }
+.hint { margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 11px; }

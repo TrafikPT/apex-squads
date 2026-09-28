@@ -687,7 +687,7 @@ remove:
 - Only high-confidence stats. Medium-confidence ones (damage per weapon) are
   labelled as estimates.
 
-### Popups (built 2026-09-24/25, need the overlay to show in game)
+### Popups (built 2026-09-24/25; in-game overlay and hotkeys 2026-09-28, untested on Windows)
 Everything on them comes from our own recordings: no API, so they show the
 moment they fire and need no key. Opponents' ranks were dropped (§9.1): the
 kill-feed K/D over matches we shared says more about a player.
@@ -719,9 +719,36 @@ Code: `src/encounters.ts` (when a popup fires, the cards),
 `src/player-history.ts`, `src/popup-service.ts`, `src/popup-window.ts` and
 `src/ui/popup.ts`. `npm run popup:preview` replays a recorded match
 (`APEX_REPLAY_MATCH=<id>`; from VS Code's terminal prefix it with
-`env -u ELECTRON_RUN_AS_NODE`). The window is a plain always-on-top window
-for now, so it only shows over the game in borderless windowed mode;
-Overwolf's overlay replaces it once the app is approved.
+`env -u ELECTRON_RUN_AS_NODE`).
+
+**Where the cards show** (2026-09-28). Inside the game through Overwolf's
+overlay package (`src/game-overlay.ts`): the app injects when Apex launches,
+and once the game has reported its window size the cards go in an overlay
+window with `passthrough` (every click and key stays with the game), `topMost`
+and `strictToGameWindow`. So they show in fullscreen and never take focus.
+Until then, and whenever injection fails (elevated Apex: the UAC helper isn't
+built yet; Apex's overlay switched off by Overwolf), they use the old plain
+always-on-top window, which shows over the game only in borderless windowed
+mode. The old window stays as that fallback until the overlay has proven
+itself. The overlay's `game-launched` names a game by `id` and `classId`, and
+the docs contradict each other on which is GEP's id, so Apex is registered
+and matched as both 21566 and 215661 until a log says which.
+`APEX_OVERLAY_ANY_GAME=1` injects into any supported game, to test while Apex's
+overlay is off. Card positions inside the game assume the overlay window's
+bounds are in game-window coordinates (unverified: docs/next-steps.md item 3).
+`popup:live` and `popup:preview` still use the plain window only.
+
+**Hotkeys** (`src/hotkeys.ts`, Settings → Hotkeys; Overwolf asks that overlays
+are easy to dismiss and that users are told the keys). Two actions: **hide the
+card now** (F9) and **cards off/on until the app restarts** (F10; a card says
+which way it went). F-keys because Apex binds none by default. In the game they
+are overlay hotkeys with `passthrough`, so the key reaches Apex too; outside it,
+Electron `globalShortcut`, which keeps the key from the game. They're
+registered again when settings are saved and when the overlay enters or leaves
+the game. The two actions can't share a key (Settings refuses it,
+`withDefaults` repairs a file that has it). The session's first card carries
+the reminder. A "show the last card again" key was left out until the basics
+are tried in a match.
 
 ### Planned
 | Where | Feature |
@@ -736,6 +763,7 @@ Overwolf's overlay replaces it once the app is approved.
 | Seasons | ~~Season history~~ **done (2026-09-25)**, its own tab: my ranked seasons as the game counts them (`player_stats_br_ranked_latest` / `_history`; every game, recorded or not), one account at a time (All accounts shows the most-played one). Best season by RP, this season with the peak from our own snapshots, best K/D and damage; RP by season on the rank bands; one row per season with the best value per column in bold. `rank_score` is probably the end RP (no peak for past seasons), and older ranks are approximate (the thresholds changed), so they show as "≈". Lobby stats lines go to the account of the next match in their session. History keeps growing: GEP only sends the last 5 seasons, but old recordings keep theirs |
 | Overview / Matches | **Contested landings**: enemy squads engaged in the first 3 min after `landed` (my damage targets plus squad kill-feed fights, by roster `team_id`). In the 23 recorded matches: 3+ squads in 7 (avg placement 13.9), 0–2 in 16 (avg 9.8). Lets hot drops be judged by what happened, not where we landed |
 | Matches | **Third parties** (try it, then decide): a death where I'd been damaging squad A and was knocked by squad B within a short window. A heuristic: check on real matches before showing it |
+| Settings | ~~Hotkeys and your data~~ **done (2026-09-28)**: the Hotkeys card (click a key, then press the new one; Escape cancels) and a Your data card (recordings folder, sessions and size, the settings file). No field for the apexlegendsstatus key: all it adds is the ranked season's start date |
 | Settings | ~~Popup settings~~ **done (2026-09-25)**: kill/death cards and the lobby card on or off, position (six spots), how long they stay (4/7/10/15 s), a test button. One JSON file in the system's app-data folder (`Apex Squads/settings.json`, `src/settings-store.ts`), read by the popup window before each popup, so it applies to every entry point (Overwolf app, `popup:live`) without a restart. The filter bar is hidden on Settings |
 | Settings | Diagnostics: recent `lifecycle` errors, GEP feature status. Maybe: ranked games not recorded, from the `games` count in `player_stats` (7 on 24 Sept) |
 | Settings | Obituaries check: warn when a match has no `kill_feed` lines |

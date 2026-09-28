@@ -47,6 +47,7 @@ export class PopupService {
 /** One line of text per popup, for the terminal. */
 export function describePopup(p: Popup): string {
   if (p.moment === 'lobby') return `Lobby: ${p.players.map((c) => `${c.name} (killed you ${c.theyKilledMe}×, K/D ${c.kd?.toFixed(2)})`).join(', ')}`;
+  if (p.moment === 'notice') return p.text;
   const c = p.player;
   const fight = p.moment === 'killed_by' ? ` with ${c.weapon ?? '?'}, you hit them for ${c.damageFromMe}` : '';
   return `${p.moment === 'killed_by' ? 'Killed by' : 'You killed'} ${c.name}${fight}: ${c.kills} kills${c.killLeader ? ', kill leader' : ''}` +

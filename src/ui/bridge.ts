@@ -15,6 +15,16 @@ export interface ApexBridge {
   onPopup(callback: (popup: Popup) => void): void;
   /** Opens the folder of recordings in the file manager (for bug reports). */
   openRecordingsFolder(): Promise<void>;
+  /** Where the app keeps its data, for Settings. */
+  dataInfo(): Promise<DataInfo>;
+}
+
+export interface DataInfo {
+  recordingsFolder: string;
+  /** Recorded sessions: one .jsonl file each. */
+  sessions: number;
+  bytes: number;
+  settingsFile: string;
 }
 
 declare global {

@@ -39,5 +39,15 @@ export interface LobbyPopup {
   players: PlayerCard[];
 }
 
-/** As sent to the popup window: which edge the card sits against (bottom positions grow upwards). */
-export type Popup = (EncounterPopup | LobbyPopup) & { anchor?: 'top' | 'bottom' };
+/** A short message from the app itself, e.g. that the hotkey turned the cards off. */
+export interface NoticePopup {
+  moment: 'notice';
+  at: string;
+  text: string;
+}
+
+/**
+ * As sent to the popup window: which edge the card sits against (bottom
+ * positions grow upwards), and a line of hotkey reminder on the session's first card.
+ */
+export type Popup = (EncounterPopup | LobbyPopup | NoticePopup) & { anchor?: 'top' | 'bottom'; hint?: string };

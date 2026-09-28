@@ -17,4 +17,5 @@ contextBridge.exposeInMainWorld('apex', {
     ipcRenderer.on('apex:popup', (_event, popup) => callback(popup));
   },
   openRecordingsFolder: () => ipcRenderer.invoke('apex:open-recordings'),
+  dataInfo: () => ipcRenderer.invoke('apex:data-info'),
 });

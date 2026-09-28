@@ -110,6 +110,14 @@ tab and saved to `settings.json` in the app's data folder (`%APPDATA%\Apex Squad
 or `APEX_SQUADS_DATA_DIR`); every entry point reads it before each popup.
 `APEX_SETTINGS_FILE=<file>` uses another file.
 
+In `npm start` the cards show inside the game through Overwolf's overlay, once
+it has injected into Apex (the log says "Overlay: in Apex Legends"); until then,
+or if it can't, they fall back to a plain always-on-top window.
+`APEX_OVERLAY_ANY_GAME=1` injects into any game the overlay supports, for
+testing while Apex's overlay is off. Hotkeys (Settings → Hotkeys): F9 hides the
+card, F10 turns cards off and on; the log says whether they were registered in
+the game or globally. See DESIGN.md §12.
+
 ### Live, from the Overwolf client's log (before we had Dev Mode)
 Superseded by `npm start`; kept for replaying old logs. While another Apex
 app (e.g. TRN's tracker) runs, the Overwolf client logs
@@ -123,7 +131,8 @@ folder and it reloads by itself when a match finishes:
 ```powershell
 $env:APEX_RECORDINGS_DIR = (Resolve-Path recordings).Path; npm run app:preview
 ```
-The popup shows over Apex only in borderless windowed mode. During a match
+This mode has no overlay and no hotkeys: the popup shows over Apex only in
+borderless windowed mode. During a match
 the dashboard can't take focus, so it never pulls the mouse pointer over the
 game.
 

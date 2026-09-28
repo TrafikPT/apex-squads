@@ -22,10 +22,18 @@ export function loadSettings(): Settings {
   }
 }
 
+const savedListeners: ((settings: Settings) => void)[] = [];
+
 export function saveSettings(settings: Settings): Settings {
   const clean = withDefaults(settings);
   const file = settingsFile();
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${JSON.stringify(clean, null, 2)}\n`);
+  for (const listener of savedListeners) listener(clean);
   return clean;
+}
+
+/** For what reads settings once instead of before each use (the hotkeys). */
+export function onSettingsSaved(listener: (settings: Settings) => void): void {
+  savedListeners.push(listener);
 }

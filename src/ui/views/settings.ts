@@ -1,10 +1,13 @@
 /**
- * Settings: the popups for now (which ones, where, for how long). Changes are
- * saved at once, and the popup window reads them before each popup, so they
- * apply mid-session without a restart.
+ * Settings: the popups (which ones, where, for how long), their hotkeys, and
+ * where the data is. Changes are saved at once; the popup window reads them
+ * before each popup and the hotkeys re-register, so they apply without a restart.
  */
-import { DEFAULT_SETTINGS, POPUP_POSITIONS, POPUP_SECONDS, type PopupPosition, type Settings } from '../app-settings';
+import { DEFAULT_SETTINGS, type Hotkey, hotkeyLabel, isHotkeyCode, POPUP_POSITIONS, POPUP_SECONDS, type PopupPosition, sameHotkey,
+  type Settings } from '../app-settings';
+import type { DataInfo } from '../bridge';
 import { el } from '../dom';
+import { fmtInt } from '../format';
 import type { ViewContext, ViewResult } from './context';
 
 /** Loaded once from the app, then kept here as it's edited. */
@@ -56,7 +59,7 @@ export function settingsView(ctx: ViewContext): ViewResult {
     row('Stays for', 'A newer popup replaces the one showing',
       segmented(POPUP_SECONDS.map((s) => [s, `${s} s`]), p.seconds, editable, (seconds) => update({ seconds }))),
     el('div', { class: 'settings-actions' }, test,
-      el('span', { class: 'footnote' }, 'Popups show over the game only in borderless window mode (Apex: Settings → Video → Display Mode).')),
+      el('span', { class: 'footnote' }, 'In a match they show inside the game. If the overlay can’t get into Apex, they show over it only in borderless window mode (Apex: Settings → Video → Display Mode).')),
   );
   if (!bridge) card.append(el('div', { class: 'footnote' }, 'Settings are saved by the app; this browser preview only shows them.'));
   if (loadError) {
@@ -64,7 +67,107 @@ export function settingsView(ctx: ViewContext): ViewResult {
       "Couldn't load your settings, so they can't be changed here. If the app was running before it was updated, restart it."),
     card.children[1]);
   }
-  return { node: el('div', { class: 'view view-settings' }, card) };
+  const saveHotkey = (name: HotkeyName, h: Hotkey) => {
+    if (!bridge || !settings) return;
+    settings = { ...settings, hotkeys: { ...settings.hotkeys, [name]: h } };
+    ctx.setView('settings');
+    void bridge.saveSettings(settings).then((saved) => {
+      settings = saved;
+    });
+  };
+  const node = el('div', { class: 'view view-settings' }, card, hotkeyCard(ctx, current, editable, saveHotkey), dataCard(ctx));
+  return {
+    node,
+    // Re-rendered while capturing: the key button keeps the focus that receives the key.
+    mounted: () => node.querySelector<HTMLElement>('.key-button.capturing')?.focus(),
+  };
+}
+
+// ---------------------------------------------------------------- hotkeys
+
+type HotkeyName = keyof Settings['hotkeys'];
+
+/** The hotkey waiting for its new key, and why the last try was refused. */
+let capturing: HotkeyName | null = null;
+let hotkeyError: string | null = null;
+const MODIFIER_CODES = new Set(['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight']);
+const HOTKEY_ACTIONS: Record<HotkeyName, string> = { hide: 'hides a card', toggle: 'turns cards off and on' };
+
+function hotkeyCard(ctx: ViewContext, current: Settings, editable: boolean, save: (name: HotkeyName, h: Hotkey) => void): HTMLElement {
+  const keyButton = (name: HotkeyName) => {
+    const on = capturing === name;
+    const b = el('button', { type: 'button', class: `key-button${on ? ' capturing' : ''}` }, on ? 'Press a key…' : hotkeyLabel(current.hotkeys[name]));
+    if (!editable) b.setAttribute('disabled', '');
+    b.addEventListener('click', () => {
+      capturing = on ? null : name;
+      hotkeyError = null;
+      ctx.setView('settings');
+    });
+    b.addEventListener('blur', () => {
+      if (capturing !== name) return;
+      capturing = null;
+      ctx.setView('settings');
+    });
+    b.addEventListener('keydown', (e) => {
+      if (capturing !== name) return;
+      e.preventDefault();
+      if (MODIFIER_CODES.has(e.code)) return; // wait for the key that goes with them
+      capturing = null;
+      const next: Hotkey = { code: e.code, ctrl: e.ctrlKey, alt: e.altKey, shift: e.shiftKey };
+      const other: HotkeyName = name === 'hide' ? 'toggle' : 'hide';
+      if (e.code === 'Escape') hotkeyError = null;
+      else if (!isHotkeyCode(e.code)) hotkeyError = `That key can't be a hotkey. Use a letter, a digit or an F-key, with Ctrl, Alt or Shift if you like.`;
+      else if (sameHotkey(next, current.hotkeys[other])) hotkeyError = `${hotkeyLabel(next)} already ${HOTKEY_ACTIONS[other]}.`;
+      else {
+        hotkeyError = null;
+        save(name, next);
+        return;
+      }
+      ctx.setView('settings');
+    });
+    return b;
+  };
+  const card = el('section', { class: 'card settings-card' },
+    el('h2', { class: 'card-title' }, 'Hotkeys', el('span', { class: 'aside' }, 'click a key to change it')),
+    row('Hide the card', 'The card showing now goes away', keyButton('hide')),
+    row('Cards off and on', 'Until you press it again or restart the app; a card says which way it went', keyButton('toggle')),
+  );
+  if (hotkeyError) card.append(el('div', { class: 'settings-error' }, hotkeyError));
+  card.append(el('div', { class: 'footnote' },
+    'In the game the key still reaches Apex too. F-keys are free in Apex by default; a letter may also do something there.'));
+  return card;
+}
+
+/** Loaded once, when Settings first opens. */
+let data: DataInfo | null = null;
+let dataLoading = false;
+
+/** Where the recordings and settings are, and how much there is. */
+function dataCard(ctx: ViewContext): HTMLElement {
+  const bridge = window.apex;
+  if (!data && bridge && !dataLoading) {
+    dataLoading = true;
+    bridge.dataInfo().then((d) => {
+      data = d;
+      ctx.setView('settings');
+    }, () => undefined);
+  }
+  const open = el('button', { type: 'button', class: 'button' }, 'Open the recordings folder');
+  open.addEventListener('click', () => void bridge?.openRecordingsFolder());
+  if (!bridge) open.setAttribute('disabled', '');
+  const size = data ? `${fmtInt(data.sessions)} ${data.sessions === 1 ? 'session' : 'sessions'} · ${megabytes(data.bytes)}` : '';
+  return el('section', { class: 'card settings-card' },
+    el('h2', { class: 'card-title' }, 'Your data', el('span', { class: 'aside' }, 'kept on this PC only')),
+    row('Recordings', data ? `${data.recordingsFolder}${size ? ` · ${size}` : ''}` : '–',
+      el('span', {})),
+    row('Settings', data?.settingsFile ?? '–', el('span', {})),
+    el('div', { class: 'settings-actions' }, open,
+      el('span', { class: 'footnote' }, 'One file of game events per session. Your stats are rebuilt from them each time.')),
+  );
+}
+
+function megabytes(bytes: number): string {
+  return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function row(title: string, help: string, control: HTMLElement): HTMLElement {

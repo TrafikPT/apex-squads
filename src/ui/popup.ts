@@ -14,7 +14,11 @@ const root = document.getElementById('popup')!;
 
 window.apex?.onPopup((popup) => {
   document.body.classList.toggle('anchor-bottom', popup.anchor === 'bottom');
-  root.replaceChildren(popup.moment === 'lobby' ? renderLobby(popup) : render(popup));
+  const card = popup.moment === 'lobby' ? renderLobby(popup)
+    : popup.moment === 'notice' ? el('div', { class: 'card notice' }, el('div', { class: 'moment' }, 'Apex Squads'), el('div', { class: 'notice-text' }, popup.text))
+      : render(popup);
+  if (popup.hint) card.append(el('div', { class: 'hint' }, popup.hint));
+  root.replaceChildren(card);
 });
 
 function render(p: EncounterPopup): HTMLElement {

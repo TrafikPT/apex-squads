@@ -31,51 +31,48 @@ The list is in [overwolf/README.md](overwolf/README.md#open-questions-ask-devrel
 - Record the answers in overwolf/README.md ("Findings from our own use") and
   update this list.
 
-### 3. In-game overlay for the kill/death and lobby cards
-Today the cards are plain always-on-top windows: invisible in fullscreen,
-visible only in borderless windowed, and they can take focus from Apex (the
-mouse pointer problem). Overwolf's overlay package draws inside the game
-instead. API: [overwolf/api-reference.md](overwolf/api-reference.md) (`overlay`).
-- Add `"overlay"` to `overwolf.packages` in package.json. On `ready`:
-  `registerGames` for Apex (21566), `event.inject()` on `game-launched`, wait
-  for `game-injected`.
-- The overlay's `game-launched` info has `id` 215661 and `classId` 21566 for
-  Apex (expected from the Overwatch case; check the log): match on `classId`.
-- Create the card window with the overlay's `createWindow` (a `name` of 20
-  characters or fewer, `passthrough` so the game keeps all input). Reuse
-  `ui/popup.html` and the card rendering as they are.
-- Cards stay brief and dismissible: they already hide after 7 s. Overwolf:
-  "Apps that display persistent overlays during gameplay will not be approved.
-  Overlays must always be easy to dismiss." (overwolf/gep-and-compliance.md §8)
-- Apex running as administrator: injecting needs `installHighElevationHelper()`
-  (a UAC prompt; exit code 1223 means the user said no). Tell the user why.
-- Keep the old always-on-top window as the fallback when injection fails, until
-  the overlay has proven itself.
-- Done when: cards show in fullscreen Apex, never take focus, and a real match
-  shows them at the right moments.
+### 3. Test the in-game overlay and hotkeys on Windows
+Coded on macOS on 2026-09-28, where neither can run (DESIGN.md §12, "Popups").
+- **Overlay** (`src/game-overlay.ts`, `src/popup-window.ts`): `"overlay"` is in
+  `overwolf.packages`; on `game-launched` for Apex it injects, and once the game
+  window's size is known the cards go in an overlay window (`squad-cards`:
+  `passthrough`, `topMost`, `strictToGameWindow`). Until then, or when injection
+  fails, they use the old always-on-top window. Apex is matched as both 21566
+  and 215661: the docs disagree on which of `id` and `classId` is GEP's id.
+- **Hotkeys** (`src/hotkeys.ts`): F9 hides the card, F10 turns cards off/on for
+  the session (a card says which way it went). In the game they are overlay
+  hotkeys with `passthrough`; otherwise Electron `globalShortcut`, which keeps the
+  key from the game. Re-registered when settings are saved and when the overlay
+  enters or leaves the game. Rebindable in Settings → Hotkeys, where a key used
+  by the other action is refused. The session's first card carries the reminder
+  ("F9 hides a card · F10 turns cards off").
+- **Blocked** like item 1 while Overwolf has Apex's overlay off, except the
+  `APEX_OVERLAY_ANY_GAME=1` check below.
 
-### 4. Hotkeys and the hotkey reminder
-The user must be able to hide the cards at once and turn them off, and must be
-told the keys (overwolf/product-guidelines.md §2.4).
-- Hotkeys via `overlay.hotkeys.register`, with `passthrough` so the keys still
-  reach the game. One developer's overlay hotkeys never fired and another team
-  uses Electron's `globalShortcut` instead (overwolf/api-reference.md). Proposed defaults (check they don't clash with Apex's):
-  - hide the current card now;
-  - cards on/off for the session;
-  - show the last card again.
-  TRN's tracker uses separate show and hide keys; decide after trying it.
-- Rebindable in a settings screen (item 5), with a conflict warning.
-- Hotkey reminder: shown in the dashboard (settings and a hint on the home
-  view), and once in game on the first card of a session ("Ctrl+H hides cards").
-- Done when: the keys work mid-match, can be changed and persist, and the
-  reminder is visible.
-
-### 5. Settings screen: the rest
-The Settings tab has the popup settings (which cards, where, how long). Still
-to add: hotkeys (item 4), the apexlegendsstatus key (testers won't have ours),
-where the data is kept.
-Later: the Privacy section with the consent "Manage" button that ads require
-(overwolf/console-and-monetization.md §6).
+Checklist (`npm start`, then read the app's log):
+- [ ] `APEX_OVERLAY_ANY_GAME=1` with another overlay-supported game, now: the log
+  shows "Overlay: injecting into…" then "Overlay: in <game>"; Settings' test
+  button shows the card inside the game; F9/F10 work there and the log says
+  "Hotkeys (in game)".
+- [ ] Apex: the injection log lines, and which `id`/`classId` the overlay reports
+  (then keep only the one that matches, and update overwolf/api-reference.md).
+- [ ] Cards show in **fullscreen** Apex at the chosen position, and never take
+  focus or the mouse.
+- [ ] Positions in **windowed** mode, on a window smaller than the screen: the
+  code assumes overlay window bounds are in the game window's coordinates, which
+  the docs don't say (`inGameArea` in `src/popup-window.ts`).
+- [ ] Overlay hotkeys fire mid-match (one developer's never did) and the key
+  still reaches Apex. If they don't fire, use `globalShortcut` in the game too.
+- [ ] Without the overlay (Overwolf client closed, or the Apex overlay off): the
+  `globalShortcut` fallback, the "taken by another app" log line, and a key
+  changed in Settings working at once.
+- [ ] **Elevated Apex** (run as administrator): injection fails today and the
+  cards fall back to their own window. Add `installHighElevationHelper()` (a UAC
+  prompt; 1223 means the user said no) and tell the user why.
+- [ ] A real match shows the cards at the right moments; then the old window
+  can go once the overlay has proven itself.
+- Not built, decide after trying it: a "show the last card again" key (TRN uses
+  separate show and hide keys), and a hotkey hint on the Overview.
 
 ## Before the first QA submission
 Order within this block is flexible. Submission form: https://wkf.ms/3KL8b1m.
@@ -93,7 +90,7 @@ Order within this block is flexible. Submission form: https://wkf.ms/3KL8b1m.
   for Apex Legends" is fixed text today; make it reflect the game and the status.
 - Keep Help's FAQ and "What's new" current with each release (src/ui/views/help.ts).
 - **Launch behavior, finish on Windows.** Done on macOS (2026-09-28): tray icon
-  (placeholder) with Open / Start with Windows / Quit; closing the window keeps
+  with Open / Start with Windows / Quit; closing the window keeps
   recording; a second launch reopens the dashboard; the login item starts with
   `--hidden`. To do on Windows: check the tray icon, left-click and menu; build an
   installed app and test "Start with Windows" (it only works when packaged)
@@ -133,6 +130,11 @@ Order within this block is flexible. Submission form: https://wkf.ms/3KL8b1m.
   delete when no longer needed.
 
 ## Done
+- 2026-09-28: Settings, the rest: a Hotkeys card (item 3) and a Your data card
+  (recordings folder, sessions and size, the settings file). No field for the
+  apexlegendsstatus key: all it gives is the ranked season's start date. Later,
+  with the ads decision: the Privacy section and its consent "Manage" button
+  (overwolf/console-and-monetization.md §6).
 - 2026-09-28: Overview summarizes the other screens (six highlights: best legend by
   wins and by RP, best teammate, top gun, best map, best loadout) with a compact RP
   chart; promotion bonus RP left out of a match's RP; a Rank column in Matches.

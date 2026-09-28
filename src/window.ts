@@ -10,7 +10,7 @@ import { buildDataset } from './build-dataset';
 import { PopupWindow } from './popup-window';
 import { IN_MATCH_PHASES } from './recorder';
 import { readRecordings } from './recordings';
-import { loadSettings, saveSettings } from './settings-store';
+import { loadSettings, saveSettings, settingsFile } from './settings-store';
 import type { Settings } from './ui/app-settings';
 import type { Popup } from './ui/popup-card';
 
@@ -38,15 +38,19 @@ const TEST_POPUP: Popup = {
 };
 let testPopups: PopupWindow | null = null;
 
-/** @param recordingsDirs where the dashboard's data comes from (every .jsonl in them). */
-export function createMainWindow(recordingsDirs: string[]): BrowserWindow {
+/**
+ * @param recordingsDirs where the dashboard's data comes from (every .jsonl in them).
+ * @param popups the app's card window, so the test card goes where real ones do
+ *   (in the game when the overlay is there) and the hotkeys work on it.
+ */
+export function createMainWindow(recordingsDirs: string[], popups?: PopupWindow): BrowserWindow {
   ipcMain.removeHandler('apex:settings');
   ipcMain.handle('apex:settings', () => loadSettings());
   ipcMain.removeHandler('apex:save-settings');
   ipcMain.handle('apex:save-settings', (_e, settings: Settings) => saveSettings(settings));
   ipcMain.removeHandler('apex:test-popup');
   ipcMain.handle('apex:test-popup', () => {
-    testPopups ??= new PopupWindow();
+    testPopups ??= popups ?? new PopupWindow();
     testPopups.show(TEST_POPUP, true);
   });
 
@@ -55,6 +59,18 @@ export function createMainWindow(recordingsDirs: string[]): BrowserWindow {
     fs.mkdirSync(recordingsDirs[0], { recursive: true });
     const error = await shell.openPath(recordingsDirs[0]);
     if (error) console.error(`Could not open ${recordingsDirs[0]}: ${error}`);
+  });
+
+  ipcMain.removeHandler('apex:data-info');
+  ipcMain.handle('apex:data-info', () => {
+    const dir = recordingsDirs[0];
+    const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((n) => n.endsWith('.jsonl')) : [];
+    return {
+      recordingsFolder: path.resolve(dir),
+      sessions: files.length,
+      bytes: files.reduce((n, f) => n + fs.statSync(path.join(dir, f)).size, 0),
+      settingsFile: settingsFile(),
+    };
   });
 
   ipcMain.removeHandler('apex:dataset');

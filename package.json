@@ -11,7 +11,8 @@
   "license": "UNLICENSED",
   "overwolf": {
     "packages": [
-      "gep"
+      "gep",
+      "overlay"
     ]
   },
   "scripts": {
