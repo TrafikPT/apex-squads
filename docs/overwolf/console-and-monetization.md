@@ -2,6 +2,8 @@
 
 Distilled from dev.overwolf.com/ow-electron on 2026-09-28. Check the source URL before relying on anything time-sensitive.
 
+Additions marked "Discord" come from the Overwolf Developers Discord (exported 2026-09-28; see README.md "Sources"). "Staff" means a post by an Overwolf Team member; "member" means another developer, so treat it as experience, not policy.
+
 Scope: the Developer Console (access, users, keys, stats, release management, testing channels, store listing), monetization (payments, ads, ad policy, ad sizes, the `<owadview/>` SDK, CMP, special ad units, user identity, Gamer Grid, subscriptions via Tebex). All base URLs below are `https://dev.overwolf.com/ow-electron/...` unless written in full.
 
 ---
@@ -212,6 +214,10 @@ Source: https://dev.overwolf.com/ow-electron/developers-console/releases-managem
 - Review: "Test channels are always exempt from mandatory version review. However, you can still choose to request a review if you wish."
 - Manage: Release management -> Testing -> select channel -> Manage. "Public link for testers" -> `Copy link` to send to testers. In the test releases table: add internal notes, change rollout %, halt (prevents downloads) and resume.
 
+- Discord (#announcements, staff, 2024-01-09): test channel versions sometimes get "stuck" (error "Rollout percentage must be greater than the previous one"). "If your version gets stuck, DO NOT DISCARD THE RELEASE! That can cause the app to become un-downloadable. Instead, please inform your DevRel". Never reported fixed; treat it as standing advice.
+- Discord (native era, 2022-2023): apps can be installed from a test channel while the production channel is empty, and whitelisted accounts get new versions right away regardless of phasing. The account owner must grant roles such as Release Manager to other users (2024-03-27).
+- Discord (#tech-announcements, staff, 2024-06-17): "Promote to Production" from a test channel, for users with Release Manager permission, only for test versions at 100% rollout. Bump the version on every release: the same version can't be uploaded to two test channels, nor a production version to a test channel.
+
 Source: https://dev.overwolf.com/ow-electron/developers-console/releases-management/testing , https://dev.overwolf.com/ow-electron/developers-console/releases-management/release-management
 
 ---
@@ -227,6 +233,18 @@ Source: https://dev.overwolf.com/ow-electron/developers-console/releases-managem
   - USD only. International instructions: https://dev.overwolf.com/assets/files/payment-process-international-partners-5e836e3bac5ae464f6c65fb48ecbefb6.pdf
   - Dashboard revenue numbers "are not final"; final numbers are emailed after reconciliation.
 - The ads revenue-share percentage is not stated on these pages (see Contradictions and gaps).
+
+From the Discord:
+- The exclusivity rule dates from a policy update (#tech-announcements, staff, 2026-06-08), which also stopped approving Private Apps and background-only apps. Its wording is conditional: "If your app includes monetization, it must use Overwolf Ads, Overwolf Subscriptions, or a combination of both." Doubts go to developers@overwolf.com.
+- Ads are optional, per a member answering exactly that question on 2026-09-03 (#devs-tips): "Ads and subs are optional, always. Does not need to do much to get approved." A member's live store app runs without ads (2024). This fits the conditional policy wording; it doesn't settle what DevRel told us about QA priority for apps without ads.
+- Revenue share: an Overwolf video relayed by a member (2020-11-30) said 85% of Overwolf's revenue comes from in-app ads and subscriptions, 70% of it goes to creators, and "We don't sell any data". Old and second-hand; confirm with DevRel.
+- Promotion and ads, members' views (#devs-chat, 2026-01): one long-time developer gets 90-95% of downloads from Overwolf client notifications (CRN) when users start a game, and doubts Overwolf pushes "an app that doesn't show any ads and still gathers data"; CRN runs through the native client. Another long-time store developer doesn't monetize at all. Nobody shared CPM or revenue-per-DAU figures.
+- Ads must stay visible: a developer resubmitted after realizing ads vanishing on other screens broke a rule; advice: one persistent ad layer with the same layout on every page (#devs-chat, 2026-09).
+- Payments other than Tebex (e.g. Stripe) need an exemption: staff said to email developers@overwolf.com with the email of the original app idea submission (#devs-chat, 2026-03).
+- Revenue is seasonal (#announcements, staff, 2023-2024): it drops at the start of each month and quarter, sharply in January (ad budgets end around Dec 24), recovers "by mid-Q1", and Q4 is strongest. Explained in the revenue town hall: https://www.youtube.com/watch?v=_yOcez0aUu0&t=664s.
+- Viewability (#announcements, staff, 2023, native Ads SDK): the target is the "80% viewability industry benchmark"; ads that aren't visible (e.g. a window hidden under another) are removed, costing revenue. ow-electron 39.6.0's AdView viewability changes suggest the same logic; don't put `<owadview>` in windows that are often hidden.
+- Overwolf owns NitroPay (2024-05-08): an app's website can be monetized through it (ask DevRel).
+- Ad sizes in practice (members, 2020-2022, native): one app's revenue "skyrocketed" after moving from 160x600 to a 400x300 container (video, with display-ad fallback). Consistent with 6.5/6.6.
 
 Source: https://dev.overwolf.com/ow-electron/monetization/overview
 
@@ -398,6 +416,8 @@ if (await app.overwolf.isCMPRequired()) {
 }
 ```
 
+Discord (#tech-announcements, staff, 2025-03-27, ow-electron 31.7.12): privacy settings now vary by region (EU gets the CMP, the USA gets US-specific settings, the rest default); only the EU CMP screen shows at install or first launch; every user must always see a "Manage" button in the app's privacy settings, calling `app.overwolf.openAdPrivacySettingsWindow()`; on first launch, if `app.overwolf.isCMPRequired()`, open `openAdPrivacySettingsWindow()`; `openCMPWindow()` is deprecated. Staff use the `app.overwolf...` path (Contradiction 3).
+
 Source: https://dev.overwolf.com/ow-electron/reference/ads/consent-management-platform
 
 ### 6.9 House ads
@@ -521,6 +541,7 @@ Source: https://dev.overwolf.com/ow-electron/developers-console/grow/store-listi
   - Checkout API: packages created in your backend (dynamic catalogs), Tebex.js checkout, webhooks. "Approval is required for using the Tebex Checkout API."
 - Comparison (App Subscriptions API / Headless / Checkout): pay direct on your website (no / yes / yes); pre-made package management (yes / yes / no); Overwolf app with in-app purchases (yes / yes / no); dynamic products (no / no / yes); backend user management (yes / no / no); coupons and discounts (yes / yes / no). Support: developers@overwolf.com for App Subscriptions API; Tebex Support for the other two.
 - Fees: total 15% of the original purchase (excluding gateway fees) = Overwolf Apps Platform 10% + Tebex 5%; gateway fees variable. Described as "a discount from the platform's standard 30% revenue share".
+- Discord (#announcements, staff, 2026-09-01): "This October, we will lower the standard Tebex fee from 15% to 5%." It doesn't say whether 5% is the new total or which part drops; ask DevRel. Also new: regional pricing, free trials (1-30 days per package), subscription tiers with upsells, more recurring payment methods, self-service cancellation at portal.tebex.io.
 
 Source: https://dev.overwolf.com/ow-electron/monetization/subscriptions/overview , https://dev.overwolf.com/ow-electron/monetization/subscriptions/tebex-integrated-solutions
 
@@ -548,10 +569,10 @@ Questions the docs do not answer:
 - What the testing `exe` "verification process" checks (signing? app key?).
 - How many reviews make an app "deemed stable", and who decides that mandatory reviews stop.
 - A hard maximum `.exe` size (only a 300 MB recommendation).
-- The ads revenue-share percentage. Payment terms mention "the agreed revenue share"; the Tebex page mentions a "standard 30% revenue share" without saying what it applies to.
+- The ads revenue-share percentage. Payment terms mention "the agreed revenue share"; the Tebex page mentions a "standard 30% revenue share" without saying what it applies to. Discord: a 2020 Overwolf video (relayed by a member) said 70% goes to creators (section 5).
 - Which role names exist besides the default "Member", and what each permits.
 - What `app.overwolf.disableAdsOptimization()` and `app.overwolf.disableAnonymousAnalytics()` do to ad serving or approval. Neither is mentioned on the monetization or console pages. Elsewhere, the API reference describes them only as "Disable Ads optimization" and "Disable sending any anonymous analytics, this should be called before app.ready". The first-app page says analytics is on by default and opting out reduces collection "to the mandatory minimum". There is also `disableAdsFPD()` ("Opt out from using first party data (email address) for ad targeting").
-- Whether `--test-ad` works before Overwolf enables ads for the app uid.
+- Whether `--test-ad` works before Overwolf enables ads for the app uid. Discord (member, 2026-04-28): "I love the ads test mode!" while waiting for approval, so test ads seem to render before approval.
 - The house ad sizes available (presumably the container sizes; not stated).
 - What `slotsize` on `<owadview>` does (it appears in one example only).
 - The per-endpoint Developer Console stats API specs (not captured here).

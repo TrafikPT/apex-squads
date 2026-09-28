@@ -515,6 +515,13 @@ Source: https://dev.overwolf.com/ow-electron/reference/Overwolf-electron-APIs/ov
 
 ---
 
+### Overlay: problems members hit (Discord #devs-help, 2025, members, no staff answer)
+- Electron's minimum-size options don't apply to overlay windows ("its own resizing mechanism"); enforce limits yourself from the overlay window's move/resize events.
+- `webPreferences: { devTools: true }` opened nothing in-game. Workaround: debug the page in a normal `BrowserWindow`, or try `--remote-debugging-port=9222`.
+- `overlay.hotkeys.register({ name, keyCode, passthrough: true }, cb)` never fired for one developer although game-launch events did (Apex 21566 among the registered games); another team uses Electron's `globalShortcut` instead. Unresolved.
+- Clickable in-game overlay windows took game focus on every click (unanswered). Matters for Apex, an exclusive-mode game.
+- Some games show overlays only in borderless/windowed, not exclusive fullscreen (native report); test Apex in both.
+
 ## utility (`app.overwolf.packages.utility`)
 
 "Utility methods for tracking and managing game-related events such as game launch, exit, and scanning for installed games."
@@ -583,7 +590,11 @@ Source: https://dev.overwolf.com/ow-electron/reference/Overwolf-electron-APIs/cr
 
 ---
 
+Discord (#devs-chat, member, 2026-09-11): `overlay.takeScreenshot` freezes the game for about 30 ms or more.
+
 ## recorder (overview only)
+
+Discord (#devs-chat, member, 2026-09-11): the recorder saved only the first start/stop; later stops failed with "stop recording error - fail to start recording", errorCode -4.
 
 Only the recorder Overview page was captured (Apex Squads does not record video). Summary:
 
@@ -774,4 +785,14 @@ Planning the in-game overlay (from these pages):
 - `createWindow({ name, width, height, transparent: true, ... })`: `name` is required and unique. Window geometry is only reliable after the first `game-window-changed` (`GameWindowInfo` is undefined before that).
 - `useSharedTexture` is BETA and needs a D3D11/D3D12 game. Inference: Apex runs on D3D11 (DX12 is optional in newer builds); not stated in these pages. With a full-screen transparent window, its whole-rectangle hit-testing would block clicks; the documented workaround is `passThroughAndNotify` plus per-element IPC toggling. For a first overlay, the default CPU path is simpler.
 - If Apex runs elevated, overlay injection needs `installHighElevationHelper()` (UAC prompt; exitCode 1223 = user cancelled).
+- Discord (#devs-help, members): the overlay didn't show in CS2/OW2 exclusive fullscreen, only windowed or borderless (those are out-of-process-overlay games; check whether Apex is one); `overlay.takeScreenshot()` made the game stutter; an overlay once logged "no active graphics device" (2025-2026).
+- Discord (2025-10): `kGepSupportedGameIds` / `kGameIds` in the types package were missing games, and the sample app's helpers wouldn't take a raw id until those maps were edited. Check 21566 is present, or pass ids directly.
+- Discord (2025-07, staff): to detect games without the overlay, use `packages.utility.on('game-launched', gameInfo)` / `'game-exit'` (no event argument); with the overlay, `overlay.on('game-launched', (event, gameInfo) => event.inject())`.
+- Discord (2025-11, member): electron-vite works with npm aliases (`"electron": "npm:@overwolf/ow-electron@..."`, plus `electron` types under another alias and a tsconfig `paths` mapping).
+- Discord (2025-10): the sample app logs `gep: skip game-detected <id>` for games not in its own id list; that's the sample's filter, not GEP.
+- **Overlay game ids** (#issues-and-requests, 2026-02/03): the overlay's `GameInfo` for Overwatch had `id: 108441` and `classId: 10844`; GEP uses 10844. Staff: "yes as far as I know that's expected." So compare GEP ids with `classId`; for Apex expect `id` 215661, `classId` 21566 (inference; check a `game-launched` log).
+- Typing the packages (staff, 2026-04-19): `declare global { namespace Electron { interface App { overwolf: overwolf.OverwolfApi & { packages: overwolf.packages.OverwolfPackageManager & { gep: overwolf.packages.OverwolfGameEventPackage; overlay: IOverwolfOverlayApi; recorder: IOverwolfRecordingApi; utility: IOverwolfUtilityApi; }; }; } } }`
+- `GameWindowInfo` gave the screen size, not the letterboxed render area, and `scaleFactor` stayed 1; `dpiAware` didn't help; staff "looking into this" (2026-02, no fix).
+- `overlay.registerGames` never resolved and "Failed to read memory: 998" appeared at GEP ready (LoL with Vanguard, 2026-07; also R6); moved to email, cause unknown, possibly anti-cheat.
+- Diagnostic: `<userData>/<app-uid>/logs/owpm.log`, line `resolving package [gep] remotely [...]`, shows which package version and URL the app got; a `0/0.0.0` URL means a stub, i.e. no GEP (setup-and-release.md section 3).
 - Closing overlay windows on `game-exit` (overlay's own event: `(gameInfo, wasInjected)`, no leading `event` argument, different from GEP's `game-exit`).

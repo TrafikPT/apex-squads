@@ -2,6 +2,8 @@
 
 Distilled from dev.overwolf.com/ow-electron on 2026-09-28. Check the source URL before relying on anything time-sensitive.
 
+Additions marked "Discord" come from the Overwolf Developers Discord (exported 2026-09-28; see README.md "Sources"). "Staff" means a post by an Overwolf Team member; "member" means another developer, so treat it as experience, not policy.
+
 Scope: the 25 pages under `guides/product-guidelines/` and the 8 pages under `guides/growth/`. All URLs below are prefixed `https://dev.overwolf.com/ow-electron/`. Some page slugs contain typos in the real URL (`desktop-scrreens`, `branding-intelectual-property`); they are kept as-is.
 
 How to read this file:
@@ -98,6 +100,11 @@ Overlay modes:
 - Exclusive mode: games without a cursor (FPS: CS2, Fortnite named). "the only way to interact with the Overwolf app window is by activating exclusive mode." It "will show a semi-transparent window overlaid on the game window and doesn't allow keyboard or mouse input to pass into the game." Use a hotkey to toggle exclusive mode; "Provide a hotkey in your app and the option for users to change and configure the hotkey of their choice" (links to `IOverwolfOverlayApi#enterexclusivemode`).
 
 Special overlays: CSGO, Warzone and Destiny 2 have extra limits. In non-borderless fullscreen, exclusive mode is completely disabled; the app can only notify the user to switch to fullscreen borderless or windowed. "Overwolf allows capturing these games ONLY in fullscreen-borderless mode." (The same paragraph also says capture does not work in windowed mode; see "Contradictions and gaps".) Apex Legends is not named in this list.
+
+From the Discord (members; native-era experience that carries over):
+- **DPI and scaling** break window positioning more than screen size does: "when over 100 or 150% overwolf will have problem positioning the overlay correctly" (2024-03-20). Overwolf's user-facing article: https://support.overwolf.com/en/support/solutions/articles/9000176964-scaling-overwolf-apps-to-appear-properly-with-a-high-dpi-setting. Advice given: support the most common resolution/DPI combinations and call the rest unsupported. ow-electron's overlay has `dpiAware` (fixed for ow-electron 42 in Aug 2026).
+- **Reuse windows** instead of creating and destroying one per event: a long-running app hit memory leaks from destroyed windows whose scripts lingered, with 5-15 widgets per match (2022-09). Keep the card window alive and hide or show it.
+- **Borderless**: for full-screen games, run the game in borderless windowed mode during development to stop the screen flashing on every alt-tab (2024-05-07). Plain always-on-top windows likely show over Apex only in borderless or windowed mode (inference, untested).
 
 Source: guides/product-guidelines/app-screen-behavior/in-game-overlays
 
@@ -291,6 +298,8 @@ Source: guides/product-guidelines/informing-users/empty-states
 - Communicate disruptions (caused by game updates, studio requests, data discrepancies) to avoid frustration and bad reviews.
 - Recommended: integrate the public Event Status Endpoints (live-game-data-gep/verifying-events-for-your-app#review-event-status-for-all-games) to toggle features by event health, switch to fallback logic, and show a visual/text indicator of issues.
 
+- Discord: GEP for the top-10 games was 98.4% stable in 2024, with game patches the main cause of downtime (staff, 2024-11-12). Whole-game disables happen too: Apex GEP and overlay are off from 2026-09-29 for EA's anti-cheat update (gep-and-compliance.md section 5).
+
 Source: guides/product-guidelines/informing-users/service-status
 
 ### 4.5 Tooltips
@@ -373,6 +382,8 @@ Recommended:
 - Visual basics: logo and icon simple, scalable, recognizable at small sizes, no direct use of game assets; clear palette with a defined base color and a standout CTA color, not too many colors; readable typography for dense data; consistent UI elements.
 - Resources: Google Material Design (https://m3.material.io/), Figma Community UI kits, ShadCN UI (https://ui.shadcn.com/), Coolors (https://coolors.co/), Fontpair (https://fontpair.co/), Mobbin (https://mobbin.com/). Also a webinar by Jasmin Weizman (Overwolf UI/UX lead).
 
+- Discord (#devs-help, member, 2025-02, native): QA asked one developer whose overlay blended in too well to make it "obvious it was not part of the game". Relevant to the look of our cards.
+
 Source: guides/product-guidelines/branding-intelectual-property/app-identity
 
 ---
@@ -390,6 +401,8 @@ Performance statements found across the page set (there are no numeric CPU/memor
 - Home screen: minimize load time, avoid heavy animations (home-screen-design).
 - Second screen: desktop-only window "improves performance"; disable GPU hardware acceleration if running on a second screen with the game (second-screen).
 - Batch/debounce analytics calls (analytics).
+
+- Discord (members, 2021): Sentry's free tier works well for runtime-error monitoring; sample events (for example 1 in 10) to stay under quota. For ow-electron that's `@sentry/electron`; list it in the privacy policy.
 
 Source: guides/product-guidelines/analytics-performance/analytics
 
@@ -544,6 +557,7 @@ Kill/death popup cards:
 
 - [ ] [Req, if QA classes them as pop-ups] "ensure pop-ups are triggered only on the desktop and never while the user is actively playing a game." [Speculation] Cards shown during a match look more like "widgets" or "in-game overlay" in the docs' taxonomy, but that classification is not stated; confirm with DevRel.
 - [ ] [Rec] Cards should not cover key Apex HUD areas; let users move and resize them; avoid semi-transparent styling that reduces clarity.
+- [ ] [Rec, Discord] Keep one card window alive and reuse it rather than creating one per card; test at 125% and 150% Windows scaling.
 - [ ] [Speculation] Apex is an FPS without a cursor; the docs say interacting with in-game windows in such games requires exclusive mode and a hotkey. Always-on-top `BrowserWindow`s over a fullscreen game are not discussed; the documented path for in-game UI is the overlay package.
 
 Hotkeys and settings:

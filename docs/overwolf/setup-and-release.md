@@ -2,6 +2,8 @@
 
 Distilled from dev.overwolf.com/ow-electron on 2026-09-28. Check the source URL before relying on anything time-sensitive.
 
+Additions marked "Discord" come from the Overwolf Developers Discord (exported 2026-09-28; see README.md "Sources"). "Staff" means a post by an Overwolf Team member; "member" means another developer, so treat it as experience, not policy.
+
 Scope: the "Getting started" pages, the dev-tools guides (dev mode, app signing, installer, package channels, CLI, AI assistants, storage, non-Windows dev), the testing guides, the Overwolf log guides, the changelog (current + archive), support/community pages and the webinars page. Base URL for every source below: `https://dev.overwolf.com/ow-electron/`.
 
 ---
@@ -52,6 +54,13 @@ Steps:
 5. **Submit your app idea** - sign in / create an Overwolf account, then fill the form: **https://dev.overwolf.com/app-idea-form**. "The more details you can provide on your form, the easier it will be to have your app approved".
 
 After approval: Discord community (https://discord.gg/overwolf-developers) for dev discussion, support, SDK issue reports and feature requests.
+
+From the Discord (#devs-help):
+- Staff (2025-09-30): "The whitelisting process is automated. Once you submit your app idea, you should get an email approving your whitelisting in a matter of hours… we will manually remove whitelisting from app ideas that violate our TOS and Policies." In 2026 the moderator quotes 1-3 working days. You must be logged in to submit; the form then uses the account's email.
+- You never get a copy of what you submitted. To check which app and author name you registered, staff (2026-08-05): "Reach out to developers@overwolf.com with the email address you used when submitting the form and we'll check it."
+- No confirmation email two weeks after submitting: email developers@overwolf.com from the submission address; "It's possible there's a bug and you didn't receive the confirmation email" (staff, 2025-10). qq.com addresses are rejected silently (staff, 2025-09).
+- If the profile still says "Developer status: Pending" after the approval email (reports of a week to months), staff say to email developers@overwolf.com (2026-08).
+- Rejected or unwanted ideas, per the moderator and members (2026-08): personal-use apps, background-driven apps whose core lives on a website, "console apps" such as an OBS event bridge.
 
 Source: getting-started/project-roadmap
 
@@ -107,6 +116,8 @@ Monetization testing: run the sample app with `--test-ad` to enable Overwolf's t
 
 App usage analytics: on by default. Opt out of full collection with `app.overwolf.disableAnonymousAnalytics()`; collection is then reduced "to the mandatory minimum (limited to essential, non-identifying events such as app launch and basic session signals)". Governed by Overwolf's privacy policy.
 
+**GEP access follows the App UID, in practice** (Discord #devs-help, members, 2026-05 to 07): from about 2026-05-28 the package endpoint served **0.0.0 stub packages** (`electrondl.overwolf.com/0/0.0.0/gep.owepk`) to any app whose UID isn't approved, unless it runs in dev mode. Same code and GEP version: events in dev, none packaged (a packaged build got only `game_info.phase: "starting"`). A native app moved to ow-electron got GEP only after its name and author matched; without a real UID the overlay also arrives as the stub. So a packaged build only gets GEP if its `productName` + `author.name` match the approved app. Check what a build received in `<userData>/<app-uid>/logs/owpm.log`, line `resolving package [gep] remotely [...]` (version and URL). A header-injection workaround circulated before signing existed; don't use it: even with real packages, an unapproved packaged app got zero events ("GEP itself only works in dev mode", members, 2026-06). **Staff's fix for stub packages** (#issues-and-requests, 2026-06-07/23): email developers@overwolf.com with "your app UID and share a version of your app (JSON or app.ASAR files will do as well)" (a large asar by Google Drive; "if you already have the UID that will do as well"), and "make sure you submitted an app idea before". One developer was stuck about 3 weeks until a second email thread fixed it.
+
 Source: getting-started/onboarding-resources/first-app, guides/dev-tools/ow-cli, getting-started/changelog/ow-changelog
 
 ---
@@ -122,6 +133,8 @@ Source: getting-started/onboarding-resources/first-app, guides/dev-tools/ow-cli,
 | `@overwolf/electron-is-overwolf` | like `electron-is-dev` | Detect whether running as ow-electron or plain electron |
 | `@overwolf/ow-electron-packages-types` | - | Type definitions for the gaming packages (archive changelog 22.3.13). Changelog requires `1.1.5-2`+ (ow-electron 39.8.10) and `1.1.6`+ (overlay 2.0.5 features) |
 
+Discord (#tech-announcements, staff, 2026-07-01/14): types 1.1.5 moved the `overwolf` API to a global ambient namespace ("Removed all legacy module-level imports (import { overwolf } from ...)"), made manual `Electron.App` augmentations in `global.d.ts` unnecessary, and "Removed the redundant electron devDependency, as it is now bundled natively by ow-electron". A types error when `electron` is also in `package.json` was fixed. Repo: `electron` stays a devDependency because the previews (`app:preview`, `popup:preview`, `popup:live`) run plain Electron.
+
 You can run ow-electron and plain Electron side by side in one project (upstream compatibility "for specific versions") and use `electron-is-overwolf` to tell them apart / disable Overwolf features for "vanilla" builds.
 
 ### How the Overwolf packages are downloaded and loaded
@@ -133,7 +146,9 @@ You can run ow-electron and plain Electron side by side in one project (upstream
 - Package versions can be published as staged (phased) rollouts; which version a machine gets is decided from the machine identifier (package-channels page).
 - Loading requires authentication: in dev mode via dev credentials (section 5); in distributed builds via Overwolf signing + your own exe code signature (section 6).
 - ow-electron-builder 23.6.0 (archive): "Core Overwolf utilities will now be automatically included in the built executable."
+- Discord (#devs-help, members, 2025-04): a real ow-electron build logs "downloading and packing owutility.dll"; use `"postinstall": "ow-electron-builder install-app-deps"` and call `ow-electron-builder` directly rather than through `npx`. `app.overwolf` exists only in the main process, so renderer checks for `overwolf` always say "plain Electron".
 - GEP support for games "must be enabled on a per-app basis. For more details, contact us." (frameworks-overview).
+- Discord (#tech-announcements, staff, 2024-08-14): builder **24.13.6** added `"enablePackageBundling"` to the `overwolf` object in `package.json`: the packages are downloaded at build time, bundled into `setup.exe` and unpacked at install, "ready to use from the first launch". So "not bundled" is the default, not the only option. Whether the flag still works with builder 26.9.x isn't stated.
 
 ### Other features on the technical overview page
 
@@ -141,6 +156,16 @@ You can run ow-electron and plain Electron side by side in one project (upstream
 - Built-in CMP (Consent Management Platform): check whether the user must be shown the CMP, and show it.
 - Distribution resources: CDN (free hosting of release files, managed via the Console), Custom Installer (with CMP intro flow), Updater Endpoint (an electron-updater endpoint).
 - Code signing: "With ow-electron you will need to provide your own code signing certificate from a trusted Certificate Authority (e.g., DigiCert, Sectigo, etc.)."
+
+From the Discord (members):
+- With the Overwolf client running and no apps open, one member measured +15-20% GPU load and higher latency in Overwatch (RTX 3080); the client uses about 300-400 MB RAM (2026). Another reason not to need it alongside our app.
+- ow-electron apps run on macOS (one ships there): overlay, recorder and GEP are simply absent and throw no errors (2025-11).
+- Plain Electron without Overwolf's packages probably can't be listed in the store (2026-03).
+- Sample app workflow (staff, 2025-11-05): `build:dev` watches; save, then relaunch; F5 in a window's DevTools may reload renderer changes; main-process changes need a relaunch.
+- An SPA loaded from files needs hash-based routing (member, Angular, 2025-05).
+- Tools: the open-source `overwolf-app-toolkit` groups errors in a user's "Send logs" zip (`npx -p overwolf-app-toolkit overwolf-log-doctor "SendLogs.zip" --report`), and `overwolf-console-mcp` answers Console stats questions; the author calls both "very early" (2026-06). Overwolf's GEP simulator is native-only.
+- If a backend is ever added, put authenticated access (e.g. JWT) in front of it: users can see and replay the app's calls (2023).
+- Localization: members recommend crowd-sourced translations with Weblate (2024).
 
 ### Frameworks comparison (Native vs Electron)
 
@@ -204,6 +229,10 @@ Options (all set environment variables on the launched process):
   - "`OW_DEV_KEY` is equivalent to `OW_CLI_EMAIL:OW_CLI_API_KEY` for dev mode verification. It uses `Bearer` authentication instead of `Key`."
   - Changelog (Documentation, Aug 2026): the dev.overwolf.com login/profile lets you "generate your own Developer Key for Dev Mode instead of waiting for Overwolf to issue one".
 
+Why a whitelisted developer can show as unauthorized (Discord #devs-help, members, 2025, mostly native): app or author name different from the whitelist request; logged in with another Overwolf account than the whitelisted one; a whitelist lapsing after a long break (email developers@overwolf.com). Co-developers each submit their own app proposal to be whitelisted.
+
+Which credentials to use, per Overwolf (Discord #tech-announcements, staff, 2026-08-03): "Developers with console access set OW_CLI_EMAIL + OW_CLI_API_KEY"; "Approved Devs without Console access: can request a temporary `OW_DEV_KEY`" (if the developer status is pending, contact DevRel). Before the first QA pass there is no Console access, so `OW_DEV_KEY` is the intended path. This explains why our `OW_CLI_EMAIL` + `OW_CLI_API_KEY` attempt failed with "invalid verification" on 2026-09-27.
+
 Precedence: "Environment variables take precedence over `OW_DEV_KEY`." Order given:
 ```
 OW_CLI_EMAIL env var (highest)
@@ -212,6 +241,8 @@ OW_CLI_EMAIL env var (highest)
 ```
 
 Expiry: the Developer Key expires (hence "Extend"), but the actual lifetime is not stated anywhere.
+
+Discord (#devs-help, members, 2026-06): one of the unstated dev-mode "conditions" is `process.defaultApp`, true when launched through the ow-electron binary (`ow-electron .`), which is why the same code gets real packages in dev and stubs when packaged. A fresh clone of the sample logging "[owepm] package manager stopped by renderer - invalid verification" means missing or wrong dev credentials (2026-08-10), as in our 2026-09-27 attempt.
 
 Source: guides/dev-tools/dev-mode, getting-started/changelog/ow-changelog
 
@@ -224,6 +255,10 @@ Source: guides/dev-tools/dev-mode, getting-started/changelog/ow-changelog
 | Minimum version | `ow-electron-builder@26.9.0` and `ow-electron@39.8.10` |
 | Platform | Windows |
 | Your certificate | "A code-signing certificate for your `exe` (your own certificate, not Overwolf's)" |
+
+**The security update is mandatory** (Discord #tech-announcements, staff, 2026-08-03): released to GA on 2026-07-16; since the grace period ended on 2026-08-06, "the Overwolf packages will stop loading unless you've upgraded to the new ow-electron and signed your app." Versions staff told everyone to install: `@overwolf/ow-electron@39.8.12`, `@overwolf/ow-electron-builder@26.9.2`, `@overwolf/ow-electron-packages-types@1.1.6-1`. Staff summary: "Overwolf signs the package, you sign the .exe. If either is missing, packages won't load."
+
+**Critical fix, 2026-07-22** (same channel, staff): a Windows dependency needed by `integrity.dll` was missing, so packages could fail to load on some systems. "If you have already built or released your app using the new signing implementation, you MUST rebuild and re-sign immediately." No version is named; builder 26.9.2 (recommended on 2026-08-03) postdates it. Never hand out a build signed before 2026-07-22.
 
 Key warning (verbatim): "Code-signing your `exe` with your own certificate is now required (previously optional). Overwolf signs the gaming package integrity and you sign the `exe`. Without both, the gaming packages (GEP, Overlay, Recorder) will not load at runtime."
 
@@ -259,6 +294,14 @@ Steps:
 2. Build and sign: `npx @overwolf/ow-electron-builder`.
 
 Related builder behavior (changelog 26.9.0): "ASAR integrity validation enabled by default on Windows - the `EnableEmbeddedAsarIntegrityValidation` and `OnlyLoadAppFromAsar` Electron fuses are now `true` for all Windows builds and cannot be changed. Electron validates the ASAR hash at startup and will not load app code from outside the archive."
+
+Signing in practice (Discord #devs-chat, members): **both the installer and the app exe** from ow-electron-builder must be signed; unsigned, users get SmartScreen warnings "and only after many thousands of install your app will be recognized" (2025-09). Costs reported (2025-2026): Azure code signing "around $10/m" (country-dependent; electron-builder supports it since 26.0); SSL.com $379 token + $129/year; Sectigo about $500, or about $150 for 36 months plus about $400 for a notary to verify identity; SignPath is free for open source only; an EU developer found about 673 EUR/year the cheapest. Signing as an individual shows your legal name on the installer; one member claimed that's "not allowed" (unverified, and contrary to ordinary OV practice). Older member claims that GEP works without a certificate predate the 2026-08-06 mandate and are wrong now.
+
+**Azure signing needs a patch** (#issues-and-requests, 2026-02-19): `@overwolf/ow-electron-builder` lacked electron-builder's Windows signing queue (electron-builder PR #9454), so Azure Trusted Signing failed when signing several files at once; the member patched it in CI and staff "passed this to our tech team". Check whether builder 26.9.2 has the queue before choosing Azure.
+
+**Who signs a first submission** (#issues-and-requests, staff, 2025-11-04/05): for native, "you can submit your unsigned opk, and the team will sign it on their end"; for ow-electron, "You cannot package an Electron App as an OPK... you need to package it as an EXE and sign it yourself." Nobody said how an ow-electron developer gets `OW_BUILD_KEY` before the Console.
+
+Which certificate (Discord #devs-help, 2026-09-14): a long-time app developer with the community "champion" role uses Azure's code signing (Trusted Signing, now Artifact Signing), "about $10 / month". Another member mentioned "recent issues with signing apps through the azure signing" (2026-06-26). Nobody discussed EV vs OV. Not from the Discord: Azure's individual-developer onboarding has been limited to some countries; check eligibility from Portugal.
 
 Not documented: how to configure the Authenticode certificate in ow-electron-builder (no config keys given; presumably standard electron-builder Windows signing, but the docs don't say), and which builder config (`build` section) is required beyond the defaults.
 
@@ -297,13 +340,18 @@ Legal and compliance requirements:
 - URLs must be hosted on a stable, publicly reachable domain; accessible without authentication; in English (or include an English version).
 - Release checklist wording: "your installer should ask users to accept a Terms of Use or a Privacy Policy. These documents MUST be accessible through valid, publicly available, URLs as part of your submission. The URLs MUST not require login and should accurately describe data collection, storage, and usage."
 
+- Discord (#devs-help, members, 2025-04): ow-electron apps can't be installed through the Overwolf client's store; a store page that only redirects to a download was discouraged. A developer who shipped the same app on both platforms said the events don't map 100% between native and ow-electron. Another said moving to ow-electron was hard (you build the updater, settings, window management yourself) but usage "exploded" because users didn't need the Overwolf client.
+
+- Discord (#devs-chat, members): for the Overwolf installer, email developers@overwolf.com and Overwolf provides the custom installer. ow-electron apps are standalone (not loaded in the client) but can have a store listing; Overwolf sets the store categories.
+- Discord (#devs-help, members, 2026-06-26): a published ow-electron app's store page served the Overwolf installer, which only started the native client and installed nothing (a moderator reproduced it). Test the installer route end to end.
+
 Source: guides/dev-tools/overwolf-installer, getting-started/release-your-app, getting-started/onboarding-resources/frameworks-overview, support/changelog-archive/ow-changelog
 
 ---
 
 ## 8. Package channels (dev/QA builds of GEP, Overlay, Recorder)
 
-- Minimum version on the page: `ow-electron@38.9.12` (changelog says the feature arrived in 39.8.12 - see Contradictions). Windows.
+- Minimum version: **`ow-electron@39.8.12`** (released 2026-08-02 per Discord #tech-announcements, staff: "`--owepm-package-channel` replacing `--owepm-packages-url`"). The page's `38.9.12` is a typo; see Contradictions. Windows.
 - Replaces `--owepm-packages-url=https://electronapi-qa.overwolf.com/v2/packages`: "`--owepm-packages-url` is no longer required." Channels are fetched "from the same production endpoint".
 
 CLI override at launch:
@@ -373,6 +421,13 @@ Non-Windows development: develop anywhere, but test in a Windows VM with GPU pas
 
 Overwolf logs pages (Trace, OBS, Overlay game HTML, OverwolfPerf, DxDiag): these describe Overwolf **client** logs (paths like `C:\Program Files (x86)\Overwolf\`, `.Game.html` injection logs, OBS recording logs, HAGS checks, driver checks, DxDiag via Win+R `dxdiag` > "Save all information"). Several links point to ow-native pages. Useful for support triage; they do not document ow-electron app log locations.
 
+From the Discord (#devs-help, members):
+- Test a **signed, packaged** build on a clean machine before submitting, with GEP events verified: QA saw "no real time game alerts" in a build that worked unpacked (native, 2025-10), and ow-electron packaged builds get stub packages when the UID isn't approved (section 3).
+- Staff's own answer to missed events when the app starts after the game (#issues-and-requests, 2025-11-09): "make the app launch during start and keep it minimized in the tray, so it'll keep listening for events and pop up the window after the game is launched". `getInfo()` came back empty after a late start, so it can't be fully recovered. Staff also called `ow-electron-packages-sample` outdated and shared an unfinished newer sample privately.
+- GEP support can depend on the store build: Fortnite failed on the Microsoft Store/Xbox version but worked on Epic (staff, 2026-01). Test Apex from both Steam and the EA App.
+- Test starting the app while the game is already running: with the unmodified sample, "open app -> open game = events working; open game -> open app = events not working" (2025-10-27, unanswered). After a game patch, `game-detected` can fail to fire while `game-exit` does (2025-12).
+- QA flagged an ow-electron app for **"no launch events"** (2026-06-28): QA seems to expect the app to start when the game launches, even though ow-electron has no manifest `launch_events`. Plan a startup-at-login/tray process that reacts to Apex launching.
+
 Source: guides/test-your-app/how-to-test-your-app, guides/dev-tools/non-windows-dev, guides/test-your-app/ow-logs/understanding-ow-logs, guides/test-your-app/ow-logs/trace, guides/test-your-app/ow-logs/obs, guides/test-your-app/ow-logs/overlay-game-html, guides/test-your-app/ow-logs/overwolfperf, guides/test-your-app/ow-logs/dxdiag
 
 ---
@@ -407,6 +462,12 @@ Store assets (prepare-your-assets page):
 - Screenshots: 1 to 5, JPG, 1200x750, max 100Kb each - but the note says 1200x750 "is no longer supported" and 1200x675 is "newly supported".
 - Description: markdown, max 2000 characters including spaces.
 
+From the Discord (#devs-help, members and moderator):
+- QA feedback comes as a detailed list "with videos/pictures/logs"; members say QA doesn't read the code. A real item (native): the overlay window didn't launch when opening the game or force-launching it. A wrong earlier submission doesn't count against a later one. A DevRel is usually assigned when you're ready for production, not at whitelisting (#devs-chat, members).
+- The first build goes through the "Submitting Your First Build" form (https://forms.monday.com/forms/6cba29808d4f0e70aaf4517ee7e4e82b; wkf.ms is monday.com's shortener, so https://wkf.ms/3KL8b1m likely opens it). It has no upload field: "Please fill in the proper information about the build file you're submitting... screenshots and a clear explanation of the app features will help"; members send the build by email or download link. Later builds before Console access: reply to the QA email, or write to developers@overwolf.com, with a **download link** (Google Drive, WeTransfer...): Gmail rejects the attachments.
+- Replacing a build already in the queue: "They will use the first one, or you will be put in the back of the list again." "Resubmit will push it to the back again" (#devs-chat, 2026-09); send the newer build to DevRel or developers@overwolf.com with a list of what changed instead. Let the current version go through; resubmit when there are changes Overwolf should see (such as new ad slots). Submitting with only the core features working is fine.
+- An ow-electron developer asked exactly our questions and got no answer (2026-06-28): does the QA test build need our own exe certificate, do the `OW_CLI_*`/`OW_BUILD_KEY` keys come after QA onboarding, when is the UID enabled for ads, is `openCMPWindow()` still right for the first consent layer, and is an NSIS uninstall hook opening a survey acceptable. A moderator on how to submit an ow-electron build (2026-08): "in my opinion that information is all a mess at this point." Ask DevRel.
+
 Source: getting-started/release-your-app, getting-started/onboarding-resources/prepare-your-assets
 
 ---
@@ -430,6 +491,24 @@ Testing channels / beta:
 - "Using the Overwolf installer is the only way to access and test different versions in the Developers Console testing Channels."
 - CLI supports uploading to and releasing in test channels and `promote-to-prod`.
 - Alternatively, since you may host/share the app anywhere (FAQ), a self-distributed build is possible; gaming packages still only load if both signatures are present.
+
+From the Discord:
+- QA is slower around Overwolf's office closures, which include **Oct 1-3, 2026**; staff ask developers to time submissions accordingly (section 16).
+- **QA backlog, staff** (#devs-chat, 2026-03-25): "Due to an overwhelming number of submitted apps in the past few months, the QA review is taking much longer than we expected." Staff promised to contact anyone waiting over a month. The automatic reply said "2-4 weeks" (2026-03) and "Results can take up to 4 weeks" (2026-09). Members in 2026: another Apex app (stream stats), submitted 2026-03-03, hadn't started QA after 80+ days until DevRel agreed to "prioritize" it; an ow-electron app waited 70 days; a second submission waited over 2 months. Keep developing on a branch meanwhile and expect to fix things in the first build.
+- Timing, from members (#devs-help): a first response "1-3 working days" (2025), but whole cycles are slower: "Submit → Wait 2 weeks → QA", "1 to 3 weeks" per cycle (2025-10); one first submission (mid-February 2026) got its first QA result in early April, and QA called itself "heavily backlogged" (2026-05); another had no reply after two weeks, by which time a game update had broken the build (2026-08). Overwolf's work week is Sunday to Thursday.
+- The order, from a DevRel email a member quoted (native, 2025-10): "We created the console environment… I will approve only that first version so you could start working through the test channels." So DevRel creates the Console app during the first QA, and test channels open once a first version is approved. Every public version needs QA approval (moderator, 2026-08).
+- Staff (#issues-and-requests, 2025-09-18, native): "to share your app with other testers, you'll need to send us your release version OPK, we will test it and enable your access to the Overwolf console", and "To share it with other users or test the app while not logged in, the app should be signed (through the Overwolf console)".
+- A self-signed certificate didn't help an ow-electron app whose packages failed as an unsigned local build (2025-04).
+- Closed beta before approval: email developers@overwolf.com and ask for the testers to be added to your app (native testers then load it unpacked; the moderator confirms "the email route is correct"). Two ow-electron developers asked about pre-QA closed betas in Aug 2026 without an answer; packaged pre-approval builds would get stub packages anyway.
+- First testing-channel installs sometimes fail (native, 2025-2026: installer runs, app never starts; fixed by Overwolf after an email). Expect to need DevRel for the first one.
+- The Console login ("Something went wrong. Please try again.") fails for many newly whitelisted developers; members always answer that it opens only after the first build passes QA, when DevRel "create[s] a console for you". One approved developer couldn't log in because the account wasn't made with Google.
+- Testers without developer accounts before launch (#devs-help, members, 2025-01, native): pass QA, then have the store listing set to "Hidden", reachable only by direct link; ask for this in the message that sends the first version for review.
+- Staff (#issues-and-requests, 2026-08-03): "we set up an Overwolf console only after you submit your app MVP and it has been approved by us, since the console's purpose is to handle the OPK/EXE's distribution." If it still fails after the approval email, email developers@overwolf.com with the app-idea email. "We don't plan to add any sign-in options other than Google."
+- Console access only after QA, restated by staff in the server's #dev-resources (2026-07-20): "You'll get access to the Overwolf console only after you submit your app and it's approved by our QA team."
+- Testers before Console access (#devs-tips, staff, 2022-03-29, native era): a developer without Console access was told to "send your OPK over to developers@overwolf.com and a DevRel will be assigned to you and will be able to help you get testing going". The mechanism is dated (OPK); the route, asking DevRel, probably still holds.
+- Promote to production (#tech-announcements, staff, 2024-06-17): a "Promote to Production" button in the Test channel release manager, Electron and native. Only users with Release Manager permission see it; only test versions at 100% rollout can be promoted; bump the version on every release (the same version can't go to two test channels, and a production version can't be uploaded to a test channel). CLI: ow-cli 0.0.9 added promote-prod (2024-07-03); 0.1.2 added `ow electron upload` and `ow versions release` (2024-08-18).
+- QA re-reviews live apps when a game publisher asks for changes (#tech-announcements, staff, 2024-12-19): "The QA team will review your app in the upcoming weeks to ensure you made the requested changes."
+- VirusTotal (#devs-tips, member, 2020-11-26): one developer's release step uploads every build to the VirusTotal API (free key) and fails on any detection. Cheap insurance given "will not be tested" above; unsigned Electron/NSIS installers often get false positives.
 
 Source: getting-started/release-your-app, getting-started/onboarding-resources/prepare-your-assets, getting-started/onboarding-resources/ow-electron-faq, guides/dev-tools/overwolf-installer, guides/dev-tools/ow-cli
 
@@ -461,10 +540,14 @@ The current changelog keeps only 6 months; older entries are in the archive. Tab
 - **39.6.0** - AdView validation/viewability improvements; GEP game-detected event supports `async` callbacks; AdView memory leak fix; in-game window resize fix. Electron breaking changes 38/39.
 - **37.10.3**, **37.7.0** (crashReporter excludes AdView process), **37.2.6**, **34.5.5** (AdView visibility with `window.hide()`), **34.4.1** (`name` option on `BrowserWindow`, normalized), **34.3.3** (Electron breaking change: a `databases` dir in `userData` is deleted on first run).
 
+Release dates from the Discord (#tech-announcements, staff): 28.3.2 2024-07-07; 28.3.3 2024-08-14 ("Do not allow media permissions requests", first-run package loading fix); 31.4.0 2024-09-23; 31.7.3 2024-11-25; 31.7.6 2025-01-30; 31.7.8 2025-03-02; 31.7.12 2025-03-27; 34.5.5 2025-05-19; 37.2.6 2025-09-07; 37.10.3 2026-01-19; 39.6.0 2026-03-02; 39.8.10 in `latest` 2026-07-14 (GA of the security update 2026-07-16); 39.8.12 2026-08-02; 39.8.13 2026-08-11; 42.7.1 in `latest` 2026-08-19.
+
 ### ow-electron-builder - undated
 - **26.9.0** - automatic Overwolf signing when `OW_CLI_EMAIL`, `OW_CLI_API_KEY`, `OW_BUILD_KEY` are set; unsigned otherwise and packages won't load. ASAR integrity fuses forced on for Windows.
 - **26.8.5** - LF line endings for Linux templates; quote fix for `/d=` install path.
 - **26.0.12** - fix: CMP settings reset after update/reinstall. **26.0.11** - electron-builder 26.0.11.
+
+Discord (#tech-announcements, staff): **26.9.2** is the version staff told everyone to use (2026-08-03). GEP versions: the electron GEP package can trail native (an Overwatch fix was native 307.3.4 while electron showed 307.2.2; 307.4.1 then went to both with a "slower than usual" rollout, 2026-06). 298.3.2 had a minimum-version bug ("Detected Gep Version 298.2.3 is Lower then the minimum allowed version: 298.3.1", then `start handler error`; `game-detected` never fired) fixed in 298.3.3/298.3.5 (2026-02). "Please don't use the 26.8.3 builder. Switch to 26.8.4" (NSIS `/d=` quote fix, 2026-04-15); 26.8.5 followed 2026-04-28. 24.13.6 `enablePackageBundling` (2024-08-14). 24.13.5 recommended for an NSIS uninstall bug (2024-07-09).
 
 ### Overlay package (dated)
 - Aug 2026: **2.0.9** (first public release of 2.0.5 features; `handleTransportBlocked` reason; fixes incl. overlay invisible when app or game ran as admin; LoL resize; dpiAware on ow-electron 42; ARC Raiders shared texture - "run your app without administrator rights to keep `useSharedTexture` active"). **2.0.5** (dev build only): `disableHardwareAcceleration`, BETA `useSharedTexture`, `isSharedTextureSupported/Available`, `setGpuPreference/getGpuPreference`, `shared-texture-unavailable`; needs packages-types `1.1.6`+.
@@ -547,6 +630,13 @@ Source: getting-started/changelog/roadmap, guides/dev-tools/ai-coding-assistants
 - X: https://x.com/OverwolfDevs ; Facebook: https://www.facebook.com/OverwolfDevs ; Newsletter: http://eepurl.com/dxC30D
 - Console: https://console.overwolf.com ; profile/dev key: https://dev.overwolf.com/profile
 
+- Discord notes (2026-09-28): Overwolf staff carry the "Overwolf Team"/"Admin" roles. Outages and game-support changes (like the Apex GEP disable of 2026-09-29) are posted in #tech-announcements first; watch it. #chat and #ask-for-help are being deprecated (staff, 2026-07-26). If the DevRel Slack login fails after maintenance, reset the password or use Google SSO (staff, 2026-04-27). Several channels are hidden from ordinary members (the archived per-game channels, the knowledge base, #get-whitelisted, #ask-overwolf). Overwolf announces office closures in #announcements, and they slow QA: for autumn 2026 the office is closed Sept 7, 11-13, 20-21, 25-26 and **Oct 1-3**; "This reduced availability may impact our app QA and OPK approval process. If you plan to submit a version for testing, please schedule your submissions accordingly" (staff, 2026-09-06). Similar closures recur around April-May, June, late August (Gamescom) and late December.
+- Staff working hours, per a member: 08:00-17:00 GMT+3, Sunday to Thursday; the weekend is Friday-Saturday. Staff always ask "native or electron?" first.
+- Support routes for developers (#announcements, staff, 2023-06-25): not Overwolf's user-support tickets, but the Discord #issues-and-requests forum, your DevRel (who runs a private Slack channel per developer) or developers@overwolf.com. The old forum (discuss.overwolf.com) closed on 2023-01-31.
+- New or changed game events are requested with the Game Events Request form, https://wkf.ms/3YWmEOb, or via DevRel or #issues-and-requests (staff, 2026-01-21 and 2026-05-18).
+- Public Q&A with Overwolf happens at Developer Town Halls (questions collected by form beforehand, recordings posted; most recent 2026-01-29: https://www.youtube.com/watch?v=fkjyc-S2Yvg). There are no regular office hours. The newsletter is now "The Changelog" on blog.overwolf.com.
+- The Developer Terms were updated effective 2024-04-19 (adds a Developer Privacy Policy and Community Guidelines; now at legal.overwolf.com). Read them before submitting.
+
 Source: support/contact-us, support/join-the-developers-community
 
 ---
@@ -571,7 +661,7 @@ Source: guides/webinars/webinars-intro
 1. **When you get Console access vs where you submit.** Release page: submit "by uploading your latest build and filling out the necessary details in the Developer Console" AND "After the initial submission passes the QA team, Overwolf will grant you access to the developer console" AND (same page) "after submission, you'll gain access". Prepare-assets: access comes "After submitting your OPK to the store for the first time". The only concrete submission path is the form https://wkf.ms/3KL8b1m.
 2. **Signing needs the Console before QA grants the Console.** App signing requires "A registered app in the Overwolf Console with an assigned App UID" and `OW_BUILD_KEY` from Console > Release management > App Keys; the pre-submission checklist says code signing is required; yet Console access is described as coming after QA passes. How the first QA build gets Overwolf-signed is not explained.
 3. **Code signing required vs recommended.** App-signing page, release checklist, FAQ: required ("now required (previously optional)"). Frameworks overview still says certificates are "highly recommended". Installer page: "No additional code signing needed for the installer" (the installer, not your app exe).
-4. **Package Channels minimum version.** Page says `ow-electron@38.9.12`; changelog says the flag and API were added in **39.8.12**. Likely a typo on one side.
+4. **Package Channels minimum version.** Page says `ow-electron@38.9.12`; changelog says the flag and API were added in **39.8.12**. Resolved: staff announced them with 39.8.12 on 2026-08-02 (Discord #tech-announcements).
 5. **OS support.** Frameworks overview: "Windows OS, Mac OS (partial support), and several Linux flavors (partial support)". FAQ/non-Windows page: only ad services on Mac/Linux; "The Overwolf client and Overwolf Electron apps will only run on Windows based systems."
 6. **Native-client leftovers in Electron pages.** Testing page talks about "opk" files and the "Overwolf task manager"; prepare-assets says "submitting your OPK"; FAQ says test with "the Overwolf Developers client"; storage page cites "Overwolf v0.161"; log pages describe the Overwolf client and link to ow-native. An ow-electron app ships an exe, not an OPK.
 7. **Legal docs: "or" vs "and".** Release checklist: installer should ask users to accept "a Terms of Use or a Privacy Policy". Installer page lists both a Terms of Use URL and a Privacy Policy URL as requirements.
@@ -593,7 +683,7 @@ Source: guides/webinars/webinars-intro
 - Whether an app that does not monetize at launch can go live (Phase 4 lists "enable ads" as part of go-live; the checklist says design for monetization "even if at first you are not planning to monetize").
 - Whether self-distributed builds (FAQ: "host the app in any location") of an approved, signed app need any further Overwolf approval.
 - Which GEP games are enabled for an app by default ("must be enabled on a per-app basis").
-- Dates of the ow-electron runtime and builder releases (the page gives none).
+- Dates of the ow-electron runtime and builder releases (the page gives none). Partly answered by the Discord announcements; see section 14.
 
 ---
 
@@ -603,7 +693,7 @@ Based on the facts above. Items marked "Speculation" are not stated by Overwolf.
 
 1. **Whitelisting comes first.** Without an approved app idea, "Unapproved apps won't have full access to the Overwolf Packages features." Submit at https://dev.overwolf.com/app-idea-form as a **Public** app with at least one desktop window (Apex Squads has a dashboard window, which fits). Private or background-only apps are not approved. If there is monetization, it must be Overwolf ads and/or subscriptions only; no third-party monetization.
 2. **Local development with GEP** needs dev mode credentials: either `OW_CLI_EMAIL` + `OW_CLI_API_KEY` (a Console account) or `OW_DEV_KEY` (self-generated on dev.overwolf.com/profile once Developer status is Approved). The key expires and must be renewed with "Extend". Dev mode needs `ow-electron@39.8.10`+. Repo: `@overwolf/ow-electron` is `^42.7.1` and `start` is `dotenv -- ow-electron .`. Note that the docs' `--no-expand` warning about `$` in API keys was written for the build script. Whether plain `dotenv --` expands a `$` in `OW_CLI_API_KEY` at start time is not covered; Speculation: it could.
-3. **Beta testers cannot use dev mode builds.** Dev mode "can't activate on a distributed or packaged app". Any build handed to testers must be (a) Overwolf-signed by `ow-electron-builder` 26.9.0+ with `OW_CLI_EMAIL`/`OW_CLI_API_KEY`/`OW_BUILD_KEY`, and (b) Authenticode-signed with your own CA certificate. Without both, GEP will not load, so the app would record nothing. `OW_BUILD_KEY` and the App UID come from the Console, so the app must be registered there first (see Contradiction 2 on timing). Repo: `@overwolf/ow-electron-builder` is not yet a dependency, there is no `build:ow-electron` script, and no signing certificate is configured.
+3. **Beta testers cannot use dev mode builds.** Dev mode "can't activate on a distributed or packaged app". Any build handed to testers must be (a) Overwolf-signed by `ow-electron-builder` 26.9.2+ (the version staff require since the mandatory security update; never a build signed before 2026-07-22) with `OW_CLI_EMAIL`/`OW_CLI_API_KEY`/`OW_BUILD_KEY`, and (b) Authenticode-signed with your own CA certificate. Without both, GEP will not load, so the app would record nothing. `OW_BUILD_KEY` and the App UID come from the Console, so the app must be registered there first (see Contradiction 2 on timing). Repo: `@overwolf/ow-electron-builder` is not yet a dependency, there is no `build:ow-electron` script, and no signing certificate is configured.
 4. **The testing-channel route for betas needs the Overwolf installer.** It is "the only way to access and test different versions in the Developers Console testing Channels". Self-hosting a signed build is allowed by the FAQ. Speculation: this is the only beta route before Console access.
 5. **The App UID is fixed by name + author.** Repo: `productName` is "Apex Squads" and `author.name` is "TrafikPT" (renamed from "Apex Tracker" on 2026-09-28, before any signed build). The UID derives from `productName` + `author.name`, and QA checks they stay "consistent across all versions". Settle the final name before the first signed or submitted build. The name must not contain "bot".
 6. **Pre-submission needs:**
@@ -622,3 +712,5 @@ Based on the facts above. Items marked "Speculation" are not stated by Overwolf.
    - Overwolf promotion requires "some form of monetization".
 8. **GEP for Apex must be enabled per app** ("must be enabled on a per-app basis", contact Overwolf). Recent GEP changes to track: `player_stats` and `ring` Info Updates (312.5.1), a second action parameter in `kill_feed` (312.3.3), the `game_mode` fix (312.5.3), and the ranked requeue `match_start` fix (311.2.0).
 9. **Admin rights:** "Apps that run with admin privileges can't inject into non-admin running games". This matters only if the overlay package is used; Apex Squads' popups may be plain windows (Speculation).
+10. **Apex GEP and overlay are off from 2026-09-29** (Discord #tech-announcements, staff, 2026-09-27) for the Apex update that ships EA Javelin anti-cheat, with no re-enable ETA yet. Until Overwolf re-enables them, Dev Mode self-tests record nothing and QA can't exercise GEP features; plan the first submission around the re-enable. See gep-and-compliance.md section 5.
+11. **Run a VirusTotal check on every build** before sending it to QA or testers (a flagged build "will not be tested"); a member's release step fails the build on any detection.

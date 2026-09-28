@@ -2,6 +2,8 @@
 
 Distilled from dev.overwolf.com/ow-electron on 2026-09-28. Check the source URL before relying on anything time-sensitive.
 
+Additions marked "Discord" come from the Overwolf Developers Discord (exported 2026-09-28; see README.md "Sources"). "Staff" means a post by an Overwolf Team member.
+
 Scope: the Game Events Provider (GEP) pages, the full Apex Legends GEP reference, and the game-compliance guides. Several pages load tables through a script ("Loading..." in the downloaded text); where that happened, the table's content is not in this file and is marked as missing.
 
 ---
@@ -22,6 +24,8 @@ Scope: the Game Events Provider (GEP) pages, the full Apex Legends GEP reference
   `--owepm-packages-url=https://electronapi-qa.overwolf.com/v2/packages`
 - You must tell your DevRel once when you are ready to go live, so the game can be moved to PROD.
 - After the game has been moved to PROD, remove that command line argument from your app.
+
+- Discord (#tech-announcements, staff, 2025-09-17 and 09-29): "GEP Package Electron version 400.0.0" (explicitly "not an ow-electron version") went to the Dev environment at 100% ("All developers using Dev will automatically receive this version") and to Prod at the start of October 2025. So Dev and Prod carry different GEP package versions; nothing says which environment Apex is in. Since ow-electron 39.8.12, `--owepm-package-channel=gep:dev` replaces the `--owepm-packages-url` argument above (setup-and-release.md section 8).
 
 Source: https://dev.overwolf.com/ow-electron/live-game-data-gep/live-game-data-gep-intro (the page https://dev.overwolf.com/ow-electron/reference/game-events has identical content)
 
@@ -62,6 +66,8 @@ Info updates fire only when a value changes, so a value can be stale and unrelia
 4. When the next match starts, `null` -> `0` fires an info update.
 
 Consequence: expect info fields to be cleared (commonly to `null`) between matches, and treat that as a reset, not as data.
+
+Discord (#devs-help, member, 2025-11-30, unanswered): there is no reset call in ow-electron, and after an Overwatch game ended roster entries came back as "UNKNOWN" instead of empty. Treat placeholder strings like `UNKNOWN` as empty too.
 
 Source: https://dev.overwolf.com/ow-electron/live-game-data-gep/live-game-data-gep-intro
 
@@ -108,6 +114,21 @@ app.overwolf.packages.gep.on('new-info-update', (e, gameId, ...args) => {
 });
 ```
 
+Discord (#devs-help, members, 2025):
+- GEP can report its own failure as info updates with `category: "plugin_status"`: `state` goes "initializing" then "error", with `last_error` "failed_initializing_monitor"; the gep log says "received unsupported info update" and "plugin error status: failed_initializing_monitor". Seen for one game for days. Worth logging and surfacing as a GEP-down signal.
+- The ow-electron GEP log is at `%APPDATA%\ow-electron\<UID>\logs\gep\gep.log` per a member (2026-06; with our own userData folder it may sit under `%APPDATA%\Apex Squads\` instead; check), and shows injection waits ("waiting injection").
+- Requested features can be silently missing from the supported set that `setRequiredFeatures` returns (native Dota report, 2025-05); log both lists.
+- `app.overwolf` exists only in the main process; a renderer never sees `overwolf`, so detect ow-electron with `@overwolf/electron-is-overwolf` or a preload flag.
+- ow-electron GEP had its own version line, 3.0.x through 2025 (3.0.7 January, 3.0.119 September), then native-style numbers from mid-September 2025 (287.0.9, 288.1.8); electron and native builds differ at the same moment, and staff quote separate fix versions ("271.1.0 of native and version 3.0.10 of electron"). Log the `gep` package version and `gep_internal` with bug reports.
+- No events and `getInfo()` undefined until `event.enable()` was called in the `game-detected` handler (Valorant, reproduced with the sample, 2025-09). `src/main.ts` calls it; keep it.
+- `[GEP] game info updated - unknown renderer, waiting...` repeating means an overlay coexistence failure and no events; staff: "Most of the time, it's either RivaTuner or Nahimic" (also SonicStudio3), visible under "Loaded modules" in the game log (2025, native). A user-facing FAQ item.
+- Error strings seen when GEP broke in electron apps: `Failed to initialize package {...}`, `GEP Error: gep-start-connection-error` (2025).
+- **`setRequiredFeatures` is a filter** (staff, #issues-and-requests, 2026-04-12): "If you don't explicitly hand the GEP service a list of requiredFeatures, the service assumes you want the full data state of the game. e.enable() simply turns on GEP service, so without it GEP won't work... setRequiredFeatures works more like a filter". An empty list gives everything; a member passes `null` on ow-electron and gets every feature. So our `setRequiredFeatures(21566, null)` means "all", and `enable()` is what matters.
+- One developer received every info update and event "even if gep.setRequiredFeatures is never called at all", reproduced with the sample app (2026-04-08; issue filed). So our `null` "all features" argument may make no difference.
+- Starting the app after the game can mean no events although `setRequiredFeatures` succeeds (sample app, 2025-10, unanswered).
+- Info updates can be coalesced: CS2 ammo arrived about 1 s late and skipped values (2025-06). Don't rely on seeing every intermediate value.
+- A `cpu_high_usage` error once preceded the GEP helper crashing silently (2026-08). A "no events during a match" watchdog is worth having.
+
 ### Game detection and elevated privileges
 
 The GEP intro and the other pages covered here **do not describe** game detection or elevated privileges. They are documented only on the API reference page (covered by another file of this knowledge base). For orientation, that page states:
@@ -124,7 +145,11 @@ Source: https://dev.overwolf.com/ow-electron/live-game-data-gep/live-game-data-g
 - The page lists games supported in the development (`dev`) and production (`prod`) environments, in three tabs: "Production", "Dev Env.", "In progress".
 - All games in `dev` "are ready to be transferred to `prod` on request". Tell your DevRel if you want to test with any listed game.
 - Contact your DevRel if the game you want is in neither environment.
-- **The tables themselves did not load in the downloaded copy.** Whether Apex Legends (21566) is in `prod` or `dev` for ow-electron is not recorded here. Check the page or the Trello card in section 1.
+- **The tables themselves did not load in the downloaded copy.** Whether Apex Legends (21566) is in `prod` or `dev` for ow-electron is not recorded here; the Discord shows it in `prod` since 2025 (section 1).
+
+- **Apex is in PROD for ow-electron** (Discord #issues-and-requests, 2025-09-19): the "Electron Games Support" Trello card, as embedded in a post, lists under "Prod: (Production Environment)": LoL, Rocket League, TFT, LoL Launcher, Diablo 4, Dota 2, **Apex Legends**, Overwatch 2, Fortnite, CS2, Valorant, Marvel Rivals, Halo Infinite, Warframe, PoE 1 and 2, and more. So no DEV flag or channel is needed; recheck the card before go-live. Staff (2025-03-18): only games with published apps are in PROD; a packaged build of a DEV-only game needs the DEV flag too (the builder doesn't add it); their URL was `https://electronapi-qa.overwolf.com/packages` (no `/v2`).
+- Discord (#devs-help, members, Jan-Apr 2025): ow-electron's PROD list was then about 7 games (ATS, Diablo IV, ETS2, LoL, LoL PBE, Rocket League, TFT; no Apex); other games, and the latest GEP version, needed the QA URL. The docs' Trello card link didn't open for members; the working board is https://trello.com/b/1V10E4IB/overwolf-developers-roadmap (card "electron games support"). Check it for Apex's current environment.
+- Discord (#tech-announcements, staff, 2025-10-30 and 11-23): a new ow-electron game list, aligned with the native one. Most newly added games are "supported for detection only"; overlay support is added gradually by "updating the game-list.ts file in the types package". Repo: the installed types list Apex (21566) in both `game-list.d.ts` and `gep-supported-games.d.ts`.
 
 Source: https://dev.overwolf.com/ow-electron/live-game-data-gep/supported-environment
 
@@ -140,6 +165,31 @@ Events may become unavailable because of:
 - discrepancies/issues found with the event's data or reliability.
 
 Overwolf supplies public "Event Status Endpoints" giving the current uptime status of individual features per game. Suggested uses: toggle specific app functionality, toggle less reliable fallback logic, show users an indication of potential issues. "It is highly recommended to communicate errors and warnings to your app users."
+
+### Outages and disables in practice (Discord)
+
+- **Apex Legends, from 2026-09-29** (#tech-announcements, staff, 2026-09-27): "On September 29th, Overwolf will temporarily disable Overlay and GEP support for Apex Legends while we monitor the new game update, which also includes a new anti-cheat release." The anti-cheat is EA Javelin (https://www.ea.com/news/introducing-ea-javelin-anticheat). Overwolf will "provide another update once the game update goes live, including an ETA for re-enabling". No follow-up as of the export (2026-09-28). While it lasts, apps get no Apex game events and no in-game overlay; `21566_prod.json` should show it.
+- **Precedent, Riot Vanguard** (#tech-announcements, staff, 2026-07-21/22): a Vanguard update blocked third-party overlays (Overwolf, OBS, Discord). Overwolf planned a mitigation (out-of-process overlay plus partial game events) and support was fully restored within about 20 hours, after Riot's fix. Staff told developers to route user issues to their DevRel manager.
+- **How often**: GEP stability for Overwolf's top-10 games in 2024 was 98.4%, with game patches the main cause of downtime; staff asked developers to tell users about outages (#tech-announcements, 2024-11-12).
+- **Why Apex `kill`/`assist` have no victim**: after an Apex patch, "`kill` and `assist` events will not send the victim's name anymore. Instead, we will send the total amount of kills / assists for the local player", and "`knockdown` event will not send the victim's name anymore" (#announcements, staff, 2024-02-21). A detection change, not a policy one; victim names come only from `kill_feed`.
+- **Publishers ask for opponent data to go**, sometimes at a day's notice: Valorant `spike_planted` removed (2025-01), Dota roster names blanked until the strategy phase (2023), LoL champ-select anonymity (2022), R6 privacy rules (2022), and LoL Classic data may not be "aggregated, tracked, or displayed to users in any form" (2026-08-02). Nothing yet for Apex, but EA could ask the same about our opponent cards.
+- **Support differs per platform**: Hytale got "basic events, currently only for Native" (2026-01-14). Native support for a game says nothing about ow-electron.
+- **Asking for events**: the Game Events Request form, https://wkf.ms/3YWmEOb (staff, 2026-01-21).
+- **After game patches** (#devs-help, members, 2025-2026): "Events being down after a patch is basically guaranteed", usually back within 1-2 days. The status page "isn't always real time": events can be down while it shows green.
+- **EA and Javelin elsewhere** (#announcements, staff, 2025-10-09 and 11-23): Overwolf was "working behind the scenes to support" Battlefield 6 and listed "Battlefield 6 events" on its roadmap. Not from the Discord: Battlefield 6 ships with EA Javelin. But a native developer reported BF6 GEP "connects" with no events for whole matches and every screenshot API timing out in-game (#issues-and-requests, 2026-07-28); staff asked for logs and declined the request without naming a cause. So Javelin coexistence isn't proven; don't count on a quick Apex re-enable.
+- **Anti-cheat can mean months** (#devs-chat, members): an ARC Raiders app was put on hold for about 6 months by Embark's anti-cheat update, which landed the day it was submitted; Rocket League's move to EAC left support dependent on talks with the studio. "Anti-cheat doesn't know if it is overwolf or electron": ow-electron gets no special treatment. So the Apex/Javelin disable could be short (Vanguard: 20 hours) or long.
+- **Per-app GEP enablement** (#devs-chat, members, 2026-06): after GEP 307.1.0, apps not enabled for GEP got "GEP package ready: 0.0.0" and nothing more; one developer was enabled about a week after emailing Overwolf. Apex events reach our app in Dev Mode, so ours looks enabled.
+- **Timing and order** (#devs-chat, members): Marvel Rivals `kill_feed` arrived with random delays; Valorant events came out of order (batched after the round) and the scoreboard dropped players mid-match. Don't build timelines on arrival order or time alone.
+- **Publisher gating** (#devs-chat, staff, 2026-08-06): "we no longer whitelist accounts building apps for Riot Games without an API key". Not Apex, but the pattern of publishers gating apps.
+- The Overwolf user Discord has a game-event status channel (member, 2026-01).
+- **Anti-cheat kick from ow-electron** (#issues-and-requests, 2025-08/09): a developer was kicked by Easy Anti-Cheat while an ow-electron dev build ran with Fortnite idle. Staff: "We had an issue that caused the Anti Cheat to activate and we fixed it." Report any anti-cheat kick at once.
+- **Dev/test GEP channel can be stale** (staff, 2026-04-30 and 2026-09-24): "it's not always up to date so it's better to use the prod version" (an R6 test channel served 700.42.0 with an empty `getFeatures()`). Use `gep:dev` only when DevRel asks. Staff also hand out trial builds by flag, e.g. `--owepm-package-channel=goop:dev,vgep:dev` (2026-08).
+- No older GEP versions are provided; events target the latest game version only (staff, 2026-02).
+- **Status page errors, staff-acknowledged**: events were down while the site showed green ("from our side, it was set to 'red'", 2025-05); a status entry was simply wrong (2026-05). Gray means deprecated.
+- **Phased GEP rollouts**: a fix reached 40% of users first (member, 2025-09), so an announced fix may not have reached you yet.
+- **Anti-cheat signature** (#devs-help, 2026-05-31, Valorant after a Vanguard update): GEP logged "failed_initializing_monitor" after exactly 5 minutes, then disconnected; the next packages fixed it. Useful to recognise if Javelin does the same to Apex.
+- **Deprecation**: GEP support for a game can end "due to lack of usage" (World of Tanks/Warships, 2024-05-07); events aren't removed but stop being maintained. Low risk for Apex.
+- Past Apex GEP fixes after game patches (native era): 2020-06-29, 2020-12-07 (`healed_from_ko`), 2021-01-06. A native gameslist update on 2024-03-25 "Fixed Apex Legends not blocking input (ID 21566)" (exclusive-mode input).
 
 ### Health levels
 
@@ -348,6 +398,8 @@ Note that the feature name and the category often differ (e.g. `me.name` has cat
 {"gameId":21566,"feature":"me","category":"game_info","key":"name","value":"Shargaas"}
 {"gameId":21566,"feature":"me","category":"me","key":"ultimate_cooldown","value":"{\"ultimate_cooldown\":\"15\"}"}
 ```
+
+Discord (#announcements, staff, 2023-02-21): `me.name` is being replaced by `game_info.player`. "We will keep the old info-update running for the near future as apps migrate between the two, until deprecating it at a later date." (The announcement's example keys `name`/`in_game_name` differ from today's `player_name`/`in_game_player_name`; our recordings match the docs.) Repo: `src/build-dataset.ts` reads `me.name` for the lobby name; the recordings carry both keys with the same value, so fall back to (or switch to) `game_info.player.player_name`.
 
 ### game_info
 
@@ -793,6 +845,8 @@ Note: "**Apps that display persistent overlays during gameplay will not be appro
 - Ads dismissible or skippable where applicable.
 - "Apps that do not comply with these guidelines will not be approved for the Overwolf Appstore."
 
+Discord (#tech-announcements, staff, 2024-12-19): publisher rules are enforced on live apps too. After a publisher asked for changes, "The QA team will review your app in the upcoming weeks to ensure you made the requested changes."
+
 Source: https://dev.overwolf.com/ow-electron/guides/game-compliance/overview
 
 ---
@@ -879,7 +933,7 @@ Source: https://dev.overwolf.com/ow-electron/guides/game-compliance/rainbow-6-si
 
 - **`setRequiredFeatures` arguments.** The GEP intro shows `setRequiredFeatures(features)` (one argument); the API reference gives `setRequiredFeatures(gameId: number, features: string[] | undefined)`. The reference is the one to follow. Neither page says what passing `null`/`undefined` means (Apex Squads passes `null` for "all", following Overwolf's sample; see `src/main.ts`).
 - **Game detection / elevated privileges** are not covered by the GEP guide pages at all; only the API reference covers them.
-- **Supported environment tables and the per-game status widget** did not load in the downloaded pages. Apex's PROD/DEV status for ow-electron is unknown from this download.
+- **Supported environment tables and the per-game status widget** did not load in the downloaded pages. Apex's PROD/DEV status for ow-electron is unknown from this download (the Discord shows PROD; section 1).
 - **Status example JSON is malformed** (unbalanced braces); the field `type` is undefined in prose.
 - **Apex `localization` feature** is listed with no documentation.
 - **`teammate_X`** fields: prose says `player`, the example says `name`.
@@ -936,20 +990,38 @@ Assessment (speculation, not stated by the docs):
 - **Data source.** Our opponent data comes from GEP (`roster`, `kill_feed`) and the user's own history, not from the players' profiles, which avoids the R6S "information which originates from said user's profile" concern. Using `origin_id` / `platform_id` to look people up on apexlegendsstatus would be closer to that line (already dropped, DESIGN 9.1).
 - **Bottom line:** the docs neither allow nor forbid this for Apex. DESIGN 10's plan to confirm with Overwolf before release is right. Ask specifically about (a) timing (during the match vs loading screen vs post-death vs post-match), (b) highlighting high-K/D players, and (c) "killed you before" history. Make every card dismissible and non-persistent in any case, since that rule is explicit.
 
+From the Discord (#issues-and-requests, staff): Overwatch enemy heroes are delayed on purpose, "to make sure we don't reveal the enemy team's heroes before they are revealed in the UI" (2025-12, "the delay is intended" 2026-08); bypassing streamer mode via GEP "would be against our and in general most game's TOS" (2026-06). The principle: don't reveal opponent information the game itself hides. Relevant to "killed you before" for anonymous or streamer-mode Apex players, which the popup already treats as unidentifiable.
+
 ### Other compliance points for the app
 
 - Our own visual identity; do not imitate the Apex UI (general rule). The use of game portraits and rank badges was cleared separately (DESIGN 10) and is not covered by these pages.
 - A support channel for users is expected.
 - Using GEP requires the app idea to be whitelisted through the App proposal process (DESIGN 10 already tracks this).
-- If Apex is only in the DEV environment for ow-electron, the app needs `--owepm-packages-url=https://electronapi-qa.overwolf.com/v2/packages` until DevRel moves Apex to PROD, and that argument must be removed afterwards. Check the Trello card.
+- Apex is in the PROD environment for ow-electron (Trello card as of 2025-09, section 1), so no DEV argument or package channel is needed. Recheck the card before go-live.
 
 ### GEP behavior to design for
 
 - Register features as early as possible after launch; if the app starts mid-match, show the user that data may be incomplete ("Run order matters!").
 - Treat `null` info values as resets between matches.
-- Poll `https://game-events-status.overwolf.com/21566_prod.json` for the planned Settings > Diagnostics (DESIGN 12) and show yellow/red states to the user, as the docs strongly recommend.
+- Poll `https://game-events-status.overwolf.com/21566_prod.json` for the planned Settings > Diagnostics (DESIGN 12) and show yellow/red states to the user, as the docs strongly recommend. The Apex disable from 2026-09-29 (section 5) is exactly this case: without it, users see a dashboard that silently stops recording.
 - `kill_feed` depends on the in-game "Obituaries" setting (the planned Obituaries check in DESIGN 12 matches the docs).
 - Our damage will always read higher than the in-game number (armor damage included).
+
+### Apex issues reported in the Discord (#issues-and-requests, 2025-2026)
+
+- **Ranked requeue** (2026-07-27): four ranked matches in a row, requeued in-game without returning to the main menu, produced only two `match_start`s and two pseudo match ids; one pseudo id spanned 48 minutes, and `teammate_*` showed unrelated names after the first wipe. Staff: "a known issue in ranked mode when using the requeue option", fixed in GEP 311.2.0 (2026-08-13). A member: "it tends to bug when you don't go back" to the menu. Our match boundaries should not rely on `match_start` alone; recordings from before mid-August 2026 may merge requeued matches.
+- **App started after the game** (2025-07-25, ow-electron): with Apex already open in the lobby when the app first launched, the first match got no `team.legendSelect_X` and no `kill` feature `knockdown`/`assist`; "fixed now with the new patch" two weeks later, no root cause given. Overwatch showed the same (enemy data incomplete until the next game, 2025-01). Start the app before the game, and mark a first match whose GEP attached mid-session as possibly incomplete.
+- **`match_summary`** (2025-06): wasn't reset between games (staff added a reset: 281.0.3). Still unresolved then: it sometimes kept the previous match's values, and on a **win** it arrived late ("it's delayed because the UI takes longer to show"). Don't rely on it alone for placement.
+- **`map` read `UNKNOWN`** for Storm Point the day it rotated into Ranked; fixed next day in 278.2.0 (2025-05). New or rotated maps, like weapons, can read UNKNOWN until reported; keep the raw id.
+- **Practice mode while queueing** broke Marvel Rivals `match_end` and the roster (fixed 282.2.2, 2025-07). Watch for the same with Apex's Firing Range while queueing.
+- Requests for local-player damage taken and shots fired (2025-03) went to the GEP team with no public answer; a request-form submission went unanswered for over a month (2025-05).
+- **Kill events fire**: a report that `kill`/`knockdown`/`assist` never fired turned out to be the member's code; staff showed them in the GEP logs within about an hour (2026-01).
+- **Weapon names**: new variants and care-package or rotating weapons show as `unknown` in `inventory`/`weapons` until someone reports them: Hemlok Burst AR, C.A.R. and G7 Scout (2026-04, fixed in 3 days), `mp_weapon_lstar_crate` (2026-07-15, fixed the same day). Staff then and said they'd add tracking "so we'll know when an ID changes". Keep the raw id as a fallback.
+- **Weapon task crash** (2026-06-26): GEP logged `crashed_on_task_task_weapon` on landing and `weapons` stayed `unknown` for the whole match; other features kept working. Fixed in 307.4.7.
+- **Ring**: a request for next-ring (and current-ring) data went to the GEP team in April-August 2026; `ring` shipped in 312.5.1 (Sep 2026).
+- **Damage**: the raw plugin event also has `grenade` (the GEP event drops it); staff say `targetName`, `headshot` and `armor` were always included (2026-09-08).
+- **After death**: a member asked for `kill_feed` after the local player dies (staff "can check") and said the GEP loop "sometimes and unreliably" breaks on local death until the game restarts (2026-08-26, unconfirmed).
+- Report bugs in the #issues-and-requests forum. Staff usually acknowledge within 0-2 days, then ask for logs: for ow-electron, the whole `%APPDATA%\ow-electron` folder zipped (2025-10), plus a timestamp. Fixes come as "Fixed in version X". They often move threads to the developer's private Slack channel ("where there is higher visibility"). Event requests use https://wkf.ms/3YWmEOb with game, event types, app name, live or not, platform (Native / OW Electron), details, example JSON and screenshots; declined requests get a stock "due to internal prioritizations..." reply months later.
 
 ### Apex features the app records but doesn't use yet
 
