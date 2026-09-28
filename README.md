@@ -1,6 +1,6 @@
-# Apex Tracker
+# Apex Squads
 
-A personal Apex Legends match recorder. It is phase 1 of [DESIGN.md](DESIGN.md):
+An Apex Legends match recorder and stats app. It is phase 1 of [DESIGN.md](DESIGN.md):
 a background app that saves every Overwolf game event to JSONL files. The
 dashboard's stats are computed from those files in the app
 (`src/build-dataset.ts`); `sql/` has DuckDB queries for exploring them.

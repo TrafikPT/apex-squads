@@ -1,4 +1,4 @@
-# Apex Tracker — Design
+# Apex Squads — Design
 
 Status: **draft v6**: recorder built; stats layer and dashboard running on 23 real matches imported from the Overwolf client's log (§9.1). Our recorder is still untested against the real game. Overwolf proposal submitted 2026-09-24; Plan B (OCR) designed in §11.
 Last updated: 2026-09-25
@@ -519,7 +519,12 @@ Still open for our own recorder: 4–9, 11, and 1–3 re-checked on our data.
   (§11)**. Respawn's Live API was ruled out: almost certainly custom lobbies
   only.
 - **Showing opponents' info** (§1, §12): TRN's overlay does it, but confirm
-  with Overwolf that it's allowed before release.
+  with Overwolf that it's allowed before release. Their guidelines say pop-ups
+  appear "never during gameplay" and "persistent overlays during gameplay will
+  not be approved" (docs/overwolf/gep-and-compliance.md §8). TRN's Apex Legends
+  Tracker, an approved app, shows similar cards mid-match, and ours are a
+  stopgap until the in-game overlay (decided 2026-09-28: keep them, ask at
+  submission).
 - **Game updates** can break GEP features for days. Overwolf publishes
   feature status. `lifecycle` lines help spot silent features.
 - **apexlegendsstatus**: response shape not yet verified (§2.2). The key is

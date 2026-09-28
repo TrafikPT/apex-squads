@@ -1,8 +1,8 @@
 {
-  "name": "apex-tracker",
-  "productName": "Apex Tracker",
+  "name": "apex-squads",
+  "productName": "Apex Squads",
   "version": "0.1.0",
-  "description": "Personal Apex Legends match recorder and stats (Overwolf GEP)",
+  "description": "Apex Legends match history, squad stats and kill/death cards (Overwolf GEP)",
   "private": true,
   "main": "dist/main.js",
   "author": {

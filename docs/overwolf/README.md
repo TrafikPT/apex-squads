@@ -38,8 +38,8 @@ it "can't activate on a distributed or packaged app".
 won't load: Overwolf's (via `@overwolf/ow-electron-builder` 26.9.0+ with `OW_CLI_EMAIL`,
 `OW_CLI_API_KEY`, `OW_BUILD_KEY`) and our own Authenticode certificate from a trusted CA.
 The App UID comes from `productName` + `author.name`, which must stay the same across
-versions: `package.json` says "Apex Tracker", the app is "Apex Squads". Settle the
-name before the first signed build.
+versions: they are "Apex Squads" and "TrafikPT" (renamed from "Apex Tracker" on
+2026-09-28, before any signed build). Don't change them again.
 
 **Dev Mode** (setup-and-release.md §5): `OW_DEV_KEY` from the dev.overwolf.com profile, or
 the `OW_CLI_EMAIL` + `OW_CLI_API_KEY` pair, which takes precedence. The key expires
@@ -74,7 +74,9 @@ DevRel before submitting (DESIGN.md §10).
 - Do ads really gate QA priority, and can an ad-free app go live?
 - Can testing channels (beta) be used before the first QA approval?
 - Are small kill/death cards during a match "pop-ups" or "persistent overlays"? Is showing
-  opponents' K/D and "killed you before" allowed for Apex?
+  opponents' K/D and "killed you before" allowed for Apex? Precedent: TRN's Apex Legends
+  Tracker, an approved Overwolf app, shows similar cards. Ours are a stopgap (plain
+  always-on-top windows) until the in-game overlay replaces them.
 - Which code-signing certificate do individual developers use?
 - Is Apex in PROD or DEV for ow-electron GEP? The docs' games table loads by script and
   wasn't captured; in practice GEP works for Apex in Dev Mode.
