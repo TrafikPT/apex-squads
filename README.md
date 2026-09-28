@@ -162,6 +162,16 @@ packages `@overwolf/ow-electron`, not the `electron` the previews use). The
 installer shows `build/license.txt` for the user to accept the Terms of Use and
 Privacy Policy; `npm run dist` refuses to build while it still has [PLACEHOLDERS].
 
+On Windows the first build can fail with "Cannot create symbolic link : A required
+privilege is not held by the client": the builder's `winCodeSign` download holds
+two macOS symlinks, which Windows only creates with Developer Mode on or as admin.
+Either turn on Developer Mode, or extract it once without them (the errors about
+the two `.dylib` files are expected):
+```powershell
+$cache = "$env:LOCALAPPDATA\electron-builder\Cache\winCodeSign"
+& .\node_modules\7zip-bin\win\x64\7za.exe x -y (Get-ChildItem "$cache\*.7z")[0].FullName "-o$cache\winCodeSign-2.6.0"
+```
+
 An unsigned build is only for checking the packaging, the installer and the
 tray/start-with-Windows behaviour: Overwolf's packages (GEP, overlay) don't load in
 it, so it records nothing. A release needs two signatures

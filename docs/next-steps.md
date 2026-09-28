@@ -37,7 +37,8 @@ The list is in [overwolf/README.md](overwolf/README.md#open-questions-ask-devrel
 ### 3. Test the in-game overlay, hotkeys and title-bar status on Windows
 Coded on macOS on 2026-09-28, where neither can run (DESIGN.md §12, "Popups" and
 "Status"). `npm run overlay:check` runs the real card window and hotkeys against a
-fake overlay (`src/fake-overlay.ts`) on any OS: 23 checks, all passing on macOS.
+fake overlay (`src/fake-overlay.ts`) on any OS: 23 checks, all passing on macOS
+and on Windows (2026-09-28).
 It tests our side only; the checklist below is Overwolf's side.
 - **Overlay** (`src/game-overlay.ts`, `src/popup-window.ts`): `"overlay"` is in
   `overwolf.packages`; on `game-launched` for Apex it injects, and once the game
@@ -139,7 +140,8 @@ Order within this block is flexible. Submission form: https://wkf.ms/3KL8b1m.
   `@overwolf/ow-electron-builder` 26.9.3 with `electron-builder.yml`, an NSIS
   installer with the exe icon and a terms page (`build/license.txt`: fill in the
   Terms and Privacy URLs; `npm run dist` refuses placeholders).
-  `npm run dist:unsigned` builds a 108 MB installer on macOS. Still to do:
+  `npm run dist:unsigned` builds a 108 MB installer on macOS and on Windows
+  (2026-09-28, after the README's `winCodeSign` workaround). Still to do:
   - run the unsigned installer on Windows: install, the terms page, shortcuts,
     icon, tray, "Start with Windows" and a reboot, uninstall (the recordings stay);
   - our exe signature: our own certificate (Azure about $10/month if it accepts
