@@ -71,8 +71,11 @@ Checklist (`npm start`, then read the app's log):
   shows "Overlay: injecting into…" then "Overlay: in <game>"; Settings' test
   button shows the card inside the game; F9/F10 work there and the log says
   "Hotkeys (in game)".
-- [ ] Apex: the injection log lines, and which `id`/`classId` the overlay reports
-  (then keep only the one that matches, and update overwolf/api-reference.md).
+- [x] Apex: the injection log lines, and which `id`/`classId` the overlay reports.
+  2026-09-28 (Windows, fullscreen 2560x1440): "injecting into Apex Legends (id
+  215661, class 21566)", then "in Apex Legends" and "Hotkeys (in game)"; GEP's
+  21566 is the `classId`. The code still registers both ids: the log doesn't say
+  which one `registerGames` matched, and it can't be retried once the overlay is off.
 - [ ] Cards show in **fullscreen** Apex at the chosen position, and never take
   focus or the mouse.
 - [ ] Positions in **windowed** mode, on a window smaller than the screen: the
@@ -143,7 +146,13 @@ Order within this block is flexible. Submission form: https://wkf.ms/3KL8b1m.
   `npm run dist:unsigned` builds a 108 MB installer on macOS and on Windows
   (2026-09-28, after the README's `winCodeSign` workaround). Still to do:
   - run the unsigned installer on Windows: install, the terms page, shortcuts,
-    icon, tray, "Start with Windows" and a reboot, uninstall (the recordings stay);
+    icon, tray, "Start with Windows" and a reboot, uninstall (the recordings stay).
+    2026-09-28: installs per user to `%LOCALAPPDATA%\Programs\Apex Squads` with
+    Start menu and desktop shortcuts and an Apps entry (Apex Squads 0.1.0,
+    TrafikPT). Still to check: tray, "Start with Windows" (no Run key yet) and a
+    reboot, uninstall. As expected, it can't load GEP, so it says "Waiting for
+    Apex Legends" with Apex running; a title-bar state for packages that fail to
+    load would be clearer;
   - our exe signature: our own certificate (Azure about $10/month if it accepts
     individuals in Portugal and the builder has its signing queue, otherwise about
     $500/year), **unless** Overwolf signs it for us: builder 26.9.3 can

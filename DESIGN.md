@@ -732,7 +732,9 @@ always-on-top window, which shows over the game only in borderless windowed
 mode. The old window stays as that fallback until the overlay has proven
 itself. The overlay's `game-launched` names a game by `id` and `classId`, and
 the docs contradict each other on which is GEP's id, so Apex is registered
-and matched as both 21566 and 215661 until a log says which.
+and matched as both 21566 and 215661. The first log (2026-09-28) says `classId`
+is GEP's 21566 (`id` 215661), but not which one `registerGames` needed, so both
+stay registered.
 `APEX_OVERLAY_ANY_GAME=1` injects into any supported game, to test while Apex's
 overlay is off. Card positions inside the game assume the overlay window's
 bounds are in game-window coordinates (unverified: docs/next-steps.md item 3).
