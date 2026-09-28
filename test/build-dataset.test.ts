@@ -147,6 +147,15 @@ test('a new install: season stats from a lobby with no matches yet still give an
   assert.deepEqual(seasons.map((s) => [s.accountKey, s.season, s.current]), [['name:NewPlayer', 29, false], ['name:NewPlayer', 30, true]]);
 });
 
+test('a lobby with only game_info.player (no me.name) still names the new account', () => {
+  const lobby = (feature: string | null, key: string, value: unknown) => ({ ...info(null, key, value), session_id: 'lobby-only', feature });
+  const { accounts } = buildDataset([
+    lobby('game_info', 'player', { player_name: '[T] NewPlayer', in_game_player_name: '[T] NewPlayer' }),
+    lobby(null, 'player_stats_br_ranked_latest', { season: 30, games: 12, rank_score: 3_200 }),
+  ]).dataset;
+  assert.deepEqual(accounts.map((a) => [a.accountKey, a.name]), [['name:NewPlayer', '[T] NewPlayer']]);
+});
+
 test('a lobby-only session goes to the account with that name once it has matches', () => {
   const lines = [...oneMatch(), { ...info(null, 'name', '[T] Me'), session_id: 's2', feature: 'me' },
     { ...info(null, 'player_stats_br_ranked_latest', { season: 30, games: 12, rank_score: 8_700 }), session_id: 's2' }];

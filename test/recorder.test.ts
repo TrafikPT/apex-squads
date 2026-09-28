@@ -123,6 +123,17 @@ test('an RP lookup by name drops the clan tag: the API only knows the bare name'
   assert.deepEqual(rank.calls, ['MiracleOfFatima']);
 });
 
+test("game_info.player also names me, for when Overwolf retires me.name", async () => {
+  const { rank, recorder, phase } = setup();
+  phase('lobby');
+  recorder.onInfoUpdate({
+    feature: 'game_info', category: 'game_info', key: 'player',
+    value: JSON.stringify({ player_name: '[SOY] MiracleOfFatima', in_game_player_name: '[SOY] MiracleOfFatima' }),
+  });
+  await flush();
+  assert.deepEqual(rank.calls, ['MiracleOfFatima']);
+});
+
 const localRoster = (name: string, originId: string) => ({
   feature: 'roster', category: 'match_info', key: 'roster_0',
   value: JSON.stringify({ name, is_local: '1', platform_id: '765', origin_id: originId }),

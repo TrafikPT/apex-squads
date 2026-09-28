@@ -18,6 +18,7 @@ import { DEFAULT_FILTERS, Filters, PeriodPreset, filterMatches, frequentTeammate
 import type { View, ViewContext, ViewResult } from './views/context';
 import { legendsView } from './views/legends';
 import { matchesView, openMatch } from './views/matches';
+import { helpView } from './views/help';
 import { overviewView } from './views/overview';
 import { seasonsView } from './views/seasons';
 import { settingsView } from './views/settings';
@@ -49,6 +50,7 @@ const VIEW_FILTERS: Record<View, readonly FilterKey[]> = {
   // The game's season totals can only be split by account.
   seasons: ['account'],
   settings: [],
+  help: [],
 };
 
 /**
@@ -67,6 +69,7 @@ function activeFilters(shown: readonly FilterKey[]): FilterKey[] {
 }
 
 const SETTINGS_ICON = 'M4 7h10M18 7h2M4 17h4M12 17h8M16 5v4M10 15v4';
+const HELP_ICON = 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01';
 
 // Set by useData(): in start(), before the first render, and when a match finishes.
 let data: Dataset;
@@ -78,8 +81,10 @@ let teammateChips: { playerKey: string; games: number }[];
 
 let filters: Filters = { ...DEFAULT_FILTERS };
 const params = new URLSearchParams(location.search);
-const VIEWS: View[] = ['overview', 'squads', 'weapons', 'legends', 'matches', 'seasons', 'settings'];
+const VIEWS: View[] = ['overview', 'squads', 'weapons', 'legends', 'matches', 'seasons', 'settings', 'help'];
 let view: View = VIEWS.find((v) => v === params.get('view')) ?? 'overview';
+/** The first-run welcome is open (?welcome=1 opens it, for screenshots). */
+let welcome = params.get('welcome') === '1';
 
 /** Stats from the recordings via the app (src/preload.ts); sample data when there are none, or with ?data=sample. */
 async function loadData(): Promise<{ data: Dataset; sample: boolean }> {
@@ -112,6 +117,12 @@ async function start(): Promise<void> {
   }
   render();
   window.addEventListener('resize', () => render());
+  // First run: the welcome, until it's dismissed (Help can show it again).
+  window.apex?.loadSettings().then((s) => {
+    if (s.welcomeSeen || welcome) return;
+    welcome = true;
+    render();
+  }, () => undefined);
   // A match finished: new numbers, same view and filters.
   window.apex?.onDatasetChanged(async () => {
     if (params.get('data') === 'sample') return;
@@ -172,16 +183,24 @@ function render(): void {
     playerName: (key) => names.get(key) ?? key,
     regulars,
     squadOf,
+    showWelcome: () => {
+      welcome = true;
+      render();
+    },
   };
   const content = renderView(ctx);
+  const filtered = VIEW_FILTERS[view].length > 0;
+  // In the app with nothing recorded yet: say that the numbers are made up, and what to do.
+  const notice = sample && window.apex && params.get('data') !== 'sample' && view !== 'settings' && view !== 'help' ? sampleNotice() : null;
   root.replaceChildren(
     el('div', { class: 'app' },
       titleBar(),
       el('div', { class: 'body' },
         sidebar(),
-        VIEW_FILTERS[view].length ? el('main', { class: 'main' }, filterBar(VIEW_FILTERS[view]), content.node)
-          : el('main', { class: 'main no-filters' }, content.node),
+        el('main', { class: `main${filtered ? '' : ' no-filters'}${notice ? ' with-notice' : ''}` },
+          ...(notice ? [notice] : []), ...(filtered ? [filterBar(VIEW_FILTERS[view])] : []), content.node),
       ),
+      ...(welcome ? [welcomeDialog()] : []),
     ),
   );
   content.mounted?.();
@@ -194,7 +213,41 @@ function renderView(ctx: ViewContext): ViewResult {
   if (view === 'legends') return legendsView(ctx);
   if (view === 'weapons') return weaponsView(ctx);
   if (view === 'seasons') return seasonsView(ctx);
+  if (view === 'help') return helpView(ctx);
   return settingsView(ctx);
+}
+
+// ---------------------------------------------------------------- first run
+
+function sampleNotice(): HTMLElement {
+  return el('div', { class: 'notice' },
+    el('strong', {}, 'No matches recorded yet.'),
+    " These are sample numbers to show what you'll get. Keep Apex Squads running while you play: your own stats replace them after your first match.");
+}
+
+function welcomeDialog(): HTMLElement {
+  const close = () => {
+    welcome = false;
+    render();
+    const bridge = window.apex;
+    // Re-read first: Settings may have saved other changes since this window loaded them.
+    void bridge?.loadSettings().then((s) => bridge.saveSettings({ ...s, welcomeSeen: true }));
+  };
+  const start = el('button', { type: 'button', class: 'button' }, "Let's go");
+  start.addEventListener('click', close);
+  const skip = el('button', { type: 'button', class: 'link-button' }, 'Skip');
+  skip.addEventListener('click', close);
+  const point = (title: string, text: string) => el('li', {}, el('div', { class: 'setting-title' }, title), el('div', { class: 'setting-help' }, text));
+  return el('div', { class: 'welcome-backdrop' },
+    el('div', { class: 'welcome', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'welcome-title' },
+      el('h1', { id: 'welcome-title', class: 'welcome-title' }, 'Welcome to Apex Squads'),
+      el('p', { class: 'welcome-lead' }, 'Stats for you and your squads, from every match you play.'),
+      el('ul', { class: 'welcome-points' },
+        point('Records in the background', 'Start it before Apex. Closing the window keeps it recording in the tray.'),
+        point('Your squads, weapons and legends', 'How you do with whom and with what, match by match and season by season.'),
+        point('Cards during matches', 'Who killed you, who you killed, and who in the lobby to watch out for. Set them up in Settings.'),
+        point('Stays on this PC', 'Your matches are saved on this computer, not uploaded.')),
+      el('div', { class: 'welcome-actions' }, start, skip)));
 }
 
 // ---------------------------------------------------------------- title bar
@@ -219,7 +272,7 @@ function sidebar(): HTMLElement {
     el('div', { class: 'section-label' }, 'Stats'),
     nav,
     el('div', { class: 'spacer' }),
-    el('nav', { class: 'nav', style: 'padding-bottom: 8px' }, navLink('settings', 'Settings', SETTINGS_ICON)),
+    el('nav', { class: 'nav', style: 'padding-bottom: 8px' }, navLink('help', 'Help', HELP_ICON), navLink('settings', 'Settings', SETTINGS_ICON)),
     el('div', { class: 'foot' },
       el('div', {}, 'v0.1 · data stays on this PC'),
       // Required by EA's fan content policy wherever game content is shown.

@@ -1,7 +1,7 @@
 /**
  * The only way the app's windows reach the main process (they're sandboxed):
  * `window.apex.loadDataset()`, `onDatasetChanged()` and the settings calls for
- * the dashboard, `onPopup()` for the popup.
+ * the dashboard, `onPopup()` for the popup, `openRecordingsFolder()` for Help.
  */
 import { contextBridge, ipcRenderer } from 'electron';
 
@@ -16,4 +16,5 @@ contextBridge.exposeInMainWorld('apex', {
   onPopup: (callback: (popup: unknown) => void) => {
     ipcRenderer.on('apex:popup', (_event, popup) => callback(popup));
   },
+  openRecordingsFolder: () => ipcRenderer.invoke('apex:open-recordings'),
 });

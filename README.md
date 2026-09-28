@@ -30,9 +30,11 @@ dashboard's stats are computed from those files in the app
 ```powershell
 npm start
 ```
-Leave the window open, then launch Apex. You should see
-`Apex Legends detected` and `Subscribed to N features`, followed by
-`Phase: ...` lines as you queue and play. Stop the recorder with Ctrl+C.
+Then launch Apex. You should see `Apex Legends detected` and
+`Subscribed to all features; Apex supports N: ...`, followed by `Phase: ...`
+lines as you queue and play. Closing the window keeps the app recording in the
+tray (orange icon): its menu reopens the dashboard or quits. Ctrl+C also stops it.
+An installed build can start with Windows from the tray menu, in the tray.
 
 If it logs "runs as administrator", start PowerShell with "Run as
 administrator" and run `npm start` again.

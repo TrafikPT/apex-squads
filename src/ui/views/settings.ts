@@ -34,7 +34,7 @@ export function settingsView(ctx: ViewContext): ViewResult {
   const editable = Boolean(bridge && settings);
   const update = (patch: Partial<Settings['popups']>) => {
     if (!bridge || !settings) return;
-    settings = { popups: { ...settings.popups, ...patch } };
+    settings = { ...settings, popups: { ...settings.popups, ...patch } };
     ctx.setView('settings');
     void bridge.saveSettings(settings).then((saved) => {
       settings = saved;

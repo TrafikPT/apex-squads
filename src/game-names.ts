@@ -10,6 +10,24 @@ export function baseName(name: string): string {
   return name.replace(/^\[[^\]]*\]\s*/, '').trim();
 }
 
+/**
+ * My name from a lobby info update: `me.name`, or `game_info.player`'s
+ * `player_name`, which Overwolf is moving it to before retiring `me.name`
+ * (docs/overwolf/gep-and-compliance.md, `me`). Anything else gives null.
+ */
+export function lobbyPlayerName(feature: string | null, key: string | null, value: unknown): string | null {
+  if (feature === 'me' && key === 'name') return typeof value === 'string' && value ? value : null;
+  if (feature !== 'game_info' || key !== 'player') return null;
+  let p = value;
+  try {
+    if (typeof value === 'string') p = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  const name = (p as { player_name?: unknown } | null)?.player_name;
+  return typeof name === 'string' && name ? name : null;
+}
+
 /** Every legend's display name. Keep in step with ui/assets/legends (scripts/fetch-legend-portraits.mjs). */
 const LEGENDS = [
   'Alter', 'Ash', 'Axle', 'Ballistic', 'Bangalore', 'Bloodhound', 'Catalyst', 'Caustic', 'Conduit', 'Crypto',

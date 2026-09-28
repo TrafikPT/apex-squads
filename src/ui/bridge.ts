@@ -13,6 +13,8 @@ export interface ApexBridge {
   /** Shows a made-up popup where the settings put it, even if popups are off. */
   testPopup(): Promise<void>;
   onPopup(callback: (popup: Popup) => void): void;
+  /** Opens the folder of recordings in the file manager (for bug reports). */
+  openRecordingsFolder(): Promise<void>;
 }
 
 declare global {

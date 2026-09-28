@@ -3,7 +3,7 @@
  * Windows the native min/max/close buttons are overlaid on it; on macOS the
  * traffic lights sit inside it.
  */
-import { BrowserWindow, app, ipcMain } from 'electron';
+import { BrowserWindow, app, ipcMain, shell } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildDataset } from './build-dataset';
@@ -48,6 +48,13 @@ export function createMainWindow(recordingsDirs: string[]): BrowserWindow {
   ipcMain.handle('apex:test-popup', () => {
     testPopups ??= new PopupWindow();
     testPopups.show(TEST_POPUP, true);
+  });
+
+  ipcMain.removeHandler('apex:open-recordings');
+  ipcMain.handle('apex:open-recordings', async () => {
+    fs.mkdirSync(recordingsDirs[0], { recursive: true });
+    const error = await shell.openPath(recordingsDirs[0]);
+    if (error) console.error(`Could not open ${recordingsDirs[0]}: ${error}`);
   });
 
   ipcMain.removeHandler('apex:dataset');

@@ -92,6 +92,13 @@ button, select, input { font-family: inherit; }
 }
 /* ---------------------------------------------------------- settings */
 .main.no-filters { grid-template-rows: minmax(0, 1fr); }
+.main.with-notice { grid-template-rows: auto auto minmax(0, 1fr); }
+.main.no-filters.with-notice { grid-template-rows: auto minmax(0, 1fr); }
+.notice {
+  background: var(--surface-2); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+  border-radius: 6px; padding: 10px 14px; color: var(--text-secondary);
+}
+.notice strong { color: var(--text-primary); }
 .settings-card { max-width: 760px; }
 .settings-error { color: var(--bad); padding: 10px 0 14px; }
 .setting { display: flex; align-items: center; gap: 24px; padding: 14px 0; border-top: 1px solid var(--grid); }
@@ -398,3 +405,29 @@ th.sortable:focus-visible { outline: 1px solid var(--accent); outline-offset: -2
 .plus { color: var(--text-muted); }
 .comp-insight .faces { margin: 6px 0 2px; }
 .comp-insight .faces .legend-badge { width: 32px; height: 32px; }
+
+/* ---------------------------------------------------------- help */
+.view-help { grid-template-columns: minmax(0, 760px); overflow-y: auto; }
+.help-card p, .help-text { color: var(--text-secondary); margin: 0 0 12px; line-height: 1.45; }
+.help-steps { margin: 4px 0 14px; padding-left: 20px; color: var(--text-secondary); line-height: 1.7; }
+.faq { border-top: 1px solid var(--grid); padding: 10px 0; }
+.faq summary { cursor: pointer; font-weight: 600; }
+.faq p { margin: 8px 0 2px; }
+.release ul { margin: 6px 0 4px; padding-left: 20px; color: var(--text-secondary); line-height: 1.6; }
+.release-head { display: flex; gap: 10px; align-items: baseline; }
+.release-version { font-weight: 600; }
+
+/* ---------------------------------------------------------- welcome */
+.welcome-backdrop {
+  position: fixed; inset: 0; z-index: 10; display: grid; place-items: center;
+  background: rgb(0 0 0 / 0.6);
+}
+.welcome {
+  width: min(520px, calc(100vw - 48px)); background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 26px 28px 22px; box-shadow: 0 20px 60px rgb(0 0 0 / 0.5);
+}
+.welcome-title { font: 700 28px/1.1 var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; margin: 0 0 6px; }
+.welcome-lead { color: var(--text-secondary); margin: 0 0 18px; }
+.welcome-points { list-style: none; margin: 0 0 22px; padding: 0; display: grid; gap: 12px; }
+.welcome-points li { border-left: 2px solid var(--accent); padding-left: 12px; }
+.welcome-actions { display: flex; align-items: center; gap: 18px; }

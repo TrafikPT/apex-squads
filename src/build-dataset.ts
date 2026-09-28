@@ -5,7 +5,7 @@
  * here; sql/ stays for exploring the raw lines. Rules follow DESIGN.md §5 and
  * the match-boundary findings in §9.1.
  */
-import { baseName, legendName, mapName, weaponName, weaponOrOther } from './game-names';
+import { baseName, legendName, lobbyPlayerName, mapName, weaponName, weaponOrOther } from './game-names';
 import type { RecordLine } from './recorder';
 import type { Account, Dataset, MatchFact, Mode, Player, SeasonFact, TeammateFact, WeaponFact } from './ui/facts';
 import { rankOf } from './ui/ranks';
@@ -187,7 +187,7 @@ function buildMatch(m: MatchLines, snapshots: Record<Mode, StatsSnapshot[]>) {
   const roster = rosterOf(all);
   const me = roster.find((r) => r.isLocal);
   const mates = roster.filter((r) => r.isTeammate && !r.isLocal);
-  const meName = me?.name ?? lastString(all, 'name') ?? 'Me';
+  const meName = me?.name ?? lastPlayerName(all) ?? 'Me';
   const picks = legendPicks(all);
 
   const startLine = m.own.find((l) => l.key === 'match_start') ?? m.own[0];
@@ -425,14 +425,15 @@ function statsSnapshots(lines: RecordLine[], key: string): StatsSnapshot[] {
  * newest snapshot wins. Stats lines come in the lobby, outside any match, so
  * they belong to the account of the next match in their session, else the
  * previous one. A session without matches (a new install that hasn't played
- * yet) goes by the lobby's player name (`me.name`): the account with that
+ * yet) goes by the lobby's player name (`me.name` or `game_info.player`): the account with that
  * name, or a new one keyed on it. `names` lists every account seen here.
  */
 function seasonFacts(lines: RecordLine[], sessionMatches: Map<string, { at: string; accountKey: string }[]>,
   accountByName: Map<string, string>): { facts: SeasonFact[]; names: Map<string, string> } {
   const lobbyName = new Map<string, string>();
   for (const l of lines) {
-    if (l.feature === 'me' && l.key === 'name' && typeof l.value === 'string' && l.value) lobbyName.set(l.session_id, l.value);
+    const name = lobbyPlayerName(l.feature, l.key, l.value);
+    if (name) lobbyName.set(l.session_id, name);
   }
   const names = new Map<string, string>();
   const accountOf = (l: RecordLine) => {
@@ -601,6 +602,14 @@ function lastString(lines: RecordLine[], key: string): string | null {
   for (let i = lines.length - 1; i >= 0; i--) {
     const v = lines[i].value;
     if (lines[i].key === key && typeof v === 'string' && v) return v;
+  }
+  return null;
+}
+
+function lastPlayerName(lines: RecordLine[]): string | null {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const name = lobbyPlayerName(lines[i].feature, lines[i].key, lines[i].value);
+    if (name) return name;
   }
   return null;
 }

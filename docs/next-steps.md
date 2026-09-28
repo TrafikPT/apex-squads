@@ -70,9 +70,10 @@ told the keys (overwolf/product-guidelines.md §2.4).
 - Done when: the keys work mid-match, can be changed and persist, and the
   reminder is visible.
 
-### 5. Settings screen in the dashboard
-None exists yet (the sidebar has a placeholder). Holds: hotkeys, cards on/off,
-the apexlegendsstatus key (testers won't have ours), where the data is kept.
+### 5. Settings screen: the rest
+The Settings tab has the popup settings (which cards, where, how long). Still
+to add: hotkeys (item 4), the apexlegendsstatus key (testers won't have ours),
+where the data is kept.
 Later: the Privacy section with the consent "Manage" button that ads require
 (overwolf/console-and-monetization.md §6).
 
@@ -83,14 +84,22 @@ Order within this block is flexible. Submission form: https://wkf.ms/3KL8b1m.
   (policy wording and members), not what they do to priority. If yes: `<owadview/>` containers of the allowed
   sizes, the consent (CMP) flow, and reconsider `disableAdsOptimization()`
   (overwolf/console-and-monetization.md §6).
-- **First-time experience, empty states, support, FAQ, release notes** per
-  overwolf/product-guidelines.md (its checklist at the end).
-- **Launch behavior:** today the app starts from a terminal. Staff's advice for
-  apps that miss events when started after the game: "launch during start and
-  keep it minimized in the tray" (Discord, 2025-11); an app started with Apex
-  open lost first-match knocks and assists; QA flagged an electron app for "no
-  launch events". So: start with Windows, wait in the tray, open on Apex launch.
-  Decide what closing the window does.
+- **Support channel.** Help (added 2026-09-28) has the FAQ, release notes and a
+  "report a problem" button that opens the recordings folder, but nowhere to send
+  a report. Pick one (a Discord server or an email address) and link it from Help;
+  Overwolf expects a support channel (product-guidelines.md §5.3).
+- **Game-events status in the dashboard**: read `21566_prod.json` and say when
+  Apex's game data is down (product-guidelines.md §4.4). The title bar's "Waiting
+  for Apex Legends" is fixed text today; make it reflect the game and the status.
+- Keep Help's FAQ and "What's new" current with each release (src/ui/views/help.ts).
+- **Launch behavior, finish on Windows.** Done on macOS (2026-09-28): tray icon
+  (placeholder) with Open / Start with Windows / Quit; closing the window keeps
+  recording; a second launch reopens the dashboard; the login item starts with
+  `--hidden`. To do on Windows: check the tray icon, left-click and menu; build an
+  installed app and test "Start with Windows" (it only works when packaged)
+  including a reboot; decide whether anything should open when Apex launches
+  (QA flagged an electron app for "no launch events"; opening the dashboard would
+  take focus from the game); a real app icon (tray, installer, window).
 - **Terms of Use and Privacy Policy** on public URLs without login; the
   installer must ask users to accept them.
 - **Packaging and signing:** `@overwolf/ow-electron-builder` 26.9.2, the Overwolf
@@ -116,19 +125,17 @@ Order within this block is flexible. Submission form: https://wkf.ms/3KL8b1m.
 - The Developer Key (`OW_DEV_KEY`) expires 2026-11-10: extend it on the
   dev.overwolf.com profile from 2026-11-08. An expired key fails with
   "invalid verification".
-- `src/build-dataset.ts` reads `me.name` for the lobby name; staff slated it for
-  deprecation in favour of `game_info.player` (overwolf/gep-and-compliance.md §7).
-  Fall back to `game_info.player.player_name`; the recordings carry both.
-- Small: the "Subscribed to N features" log line counts the features the game
-  supports, not our subscription (overwolf/api-reference.md, notes for
-  src/main.ts). Log what `setRequiredFeatures` actually did instead, plus the GEP
-  package version (bug reports need it).
 - Refresh the Discord findings now and then (overwolf/README.md, "Sources").
   #issues-and-requests and #tech-announcements matter most.
 - `Documents\ApexTracker\gep-log-backup` holds the old Overwolf client logs;
   delete when no longer needed.
 
 ## Done
+- 2026-09-28: first-run welcome (skippable, reopened from Help), a notice over the
+  sample data until the first match, and a Help page (getting started, FAQ,
+  release notes, open the recordings folder).
+- 2026-09-28: the player name comes from `me.name` or `game_info.player` (Overwolf
+  is retiring `me.name`); the features log line says what it counts.
 - 2026-09-28: Overwolf Developers Discord exported and distilled into
   docs/overwolf/ (Apex GEP disable, signing and QA realities, Apex in PROD).
 - 2026-09-28: data moved to `%APPDATA%\Apex Squads`; app renamed to Apex

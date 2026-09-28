@@ -93,15 +93,15 @@ Our kill/death and lobby cards appear during matches and highlight players, so a
 DevRel before submitting (DESIGN.md §10).
 
 **GEP and our code** (api-reference.md, gep-and-compliance.md §7):
-- "Subscribed to N features" in main.ts logs `getFeatures()`, the features the game
-  supports, not what we subscribed to. Passing `null` to `setRequiredFeatures` for
+- main.ts logs `getFeatures()`, the features Apex supports; `setRequiredFeatures`
+  reports nothing back. Passing `null` to `setRequiredFeatures` for
   "all" is undocumented, but staff say it's a filter and no list means everything
   (Discord, 2026-04); `enable()` in `game-detected` is what turns GEP on.
 - Apex game id 21566. Status: https://game-events-status.overwolf.com/21566_prod.json
   (0 unsupported, 1 green, 2 yellow, 3 red).
 - Keys we record but don't use yet include `team_damage_dealt` (teammate damage).
-- `me.name`, which `src/build-dataset.ts` reads for the lobby name, is slated for
-  deprecation in favour of `game_info.player` (staff, 2023); our recordings carry both.
+- `me.name` is slated for deprecation in favour of `game_info.player` (staff, 2023);
+  the recorder and dataset read either (`lobbyPlayerName` in src/game-names.ts).
 - In-game overlay: Apex is an exclusive-mode (hidden cursor) game; see api-reference.md
   `overlay`.
 

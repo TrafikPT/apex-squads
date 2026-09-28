@@ -1,7 +1,7 @@
 import type { Dataset, MatchFact } from '../facts';
 import type { Filters } from '../stats';
 
-export type View = 'overview' | 'squads' | 'weapons' | 'legends' | 'matches' | 'seasons' | 'settings';
+export type View = 'overview' | 'squads' | 'weapons' | 'legends' | 'matches' | 'seasons' | 'settings' | 'help';
 
 /** Everything a view needs to render; views never touch app state directly. */
 export interface ViewContext {
@@ -15,6 +15,8 @@ export interface ViewContext {
   /** Teammates with 3+ games together: shown as friends, everyone else is a random. */
   regulars: Set<string>;
   squadOf: Map<string, Set<string>>;
+  /** Opens the first-run welcome again. */
+  showWelcome(): void;
 }
 
 export interface ViewResult {

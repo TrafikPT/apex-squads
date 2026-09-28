@@ -18,15 +18,19 @@ export interface Settings {
     /** How long a popup stays up. */
     seconds: number;
   };
+  /** The first-run welcome was dismissed; Help can show it again. */
+  welcomeSeen: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   popups: { encounters: true, lobby: true, position: 'top-right', seconds: 7 },
+  welcomeSeen: false,
 };
 
 /** A stored settings object made safe: unknown keys dropped, bad values replaced by the defaults. */
 export function withDefaults(raw: unknown): Settings {
-  const p = (raw as { popups?: Record<string, unknown> } | null)?.popups ?? {};
+  const r = raw as { popups?: Record<string, unknown>; welcomeSeen?: unknown } | null;
+  const p = r?.popups ?? {};
   const d = DEFAULT_SETTINGS.popups;
   const bool = (v: unknown, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
   return {
@@ -36,5 +40,6 @@ export function withDefaults(raw: unknown): Settings {
       position: POPUP_POSITIONS.includes(p.position as PopupPosition) ? (p.position as PopupPosition) : d.position,
       seconds: (POPUP_SECONDS as readonly number[]).includes(p.seconds as number) ? (p.seconds as number) : d.seconds,
     },
+    welcomeSeen: bool(r?.welcomeSeen, DEFAULT_SETTINGS.welcomeSeen),
   };
 }

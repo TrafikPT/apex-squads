@@ -121,7 +121,8 @@ lines.
 ### 3.1 Components
 
 **Recorder.** A small background program on the Windows PC. In the PoC it
-runs in a terminal (`npm start`); a tray icon and autostart come later. In
+runs from a terminal (`npm start`) and stays in the tray when its window is
+closed; an installed build can start with Windows, hidden in the tray. In
 data-engineering terms it is the **ingestion job**: it subscribes to
 Overwolf's game events and lands each one, untransformed, as a line in an
 append-only JSONL file (one file per session). It computes no stats. Its only
@@ -537,7 +538,13 @@ Still open for our own recorder: 4–9, 11, and 1–3 re-checked on our data.
   IDs, and only my accounts and friends passed with `--keep` stay
   recognizable. The importer refuses to write if any original name or ID is
   left. Raw recordings stay out of git (`recordings/` is ignored).
-- **Recorder autostart and tray icon**: deferred; the PoC runs in a terminal.
+- **Recorder autostart and tray icon** (2026-09-28): the app runs on in the tray when
+  the window closes (closing frees the dashboard's memory; the tray reopens it), and
+  an installed build can start with Windows via the tray menu, launched with
+  `--hidden`. Overwolf staff advise exactly this for apps that miss events when
+  started after the game. Not done: opening the dashboard when Apex launches, which
+  would take focus from the game as it starts; the cards cover the in-game side.
+  The tray icon is a drawn placeholder until the app has an icon.
 - **Overlay tech** (phase 3): not designed yet.
 - **Legend portraits** (resolved 2026-09-24): EA's content policy lets fans
   use original characters in free, personal projects, provided assets aren't

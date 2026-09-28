@@ -3,7 +3,7 @@
  * anywhere. It lands every GEP message untouched as one JSONL line and adds
  * only two things: the current match id, and RP snapshots taken in the lobby.
  */
-import { baseName } from './game-names';
+import { baseName, lobbyPlayerName } from './game-names';
 
 export const APEX_GAME_ID = 21566;
 
@@ -112,10 +112,11 @@ export class Recorder {
     }
     this.write('info', msg);
 
+    const playerName = lobbyPlayerName(msg.feature, msg.key, msg.value);
     if (msg.category === 'game_info' && msg.key === 'phase') {
       this.onPhase(asString(msg.value));
-    } else if (msg.category === 'me' && msg.key === 'name') {
-      this.onPlayerName(asString(msg.value));
+    } else if (playerName) {
+      this.onPlayerName(playerName);
     } else if (msg.key.startsWith('roster_')) {
       this.onRoster(msg.value);
     }

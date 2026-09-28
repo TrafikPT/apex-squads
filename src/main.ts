@@ -1,9 +1,10 @@
 /**
  * ow-electron entry point: wires Overwolf's Game Events Provider (GEP) to the
- * Recorder, and opens the dashboard window. Logs go to the terminal. Windows
- * only (GEP requirement); use preview-main.ts to work on the UI elsewhere.
+ * Recorder, and opens the dashboard window. Runs on in the tray when the window
+ * is closed. Logs go to the terminal. Windows only (GEP requirement); use
+ * preview-main.ts to work on the UI elsewhere.
  */
-import { app } from 'electron';
+import { app, type BrowserWindow } from 'electron';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import type { OverwolfGameEventPackage } from '@overwolf/ow-electron-packages-types';
@@ -16,6 +17,7 @@ import { PopupWindow } from './popup-window';
 import { ApexStatusClient } from './rank-client';
 import { readRecordings } from './recordings';
 import { APEX_GAME_ID, Recorder, systemClock, type Sink } from './recorder';
+import { createTray, startedHidden } from './tray';
 import { createMainWindow } from './window';
 
 const SET_FEATURES_ATTEMPTS = 10;
@@ -84,13 +86,32 @@ if (!app.requestSingleInstanceLock()) {
     recorder.lifecycle('package_crashed', { can_recover: canRecover });
   });
 
-  app.whenReady().then(() => createMainWindow([recordingsDir]));
-  // Closing the window must not stop recording: keep running until Ctrl+C (tray icon later).
+  app.whenReady().then(() => {
+    createTray({ openDashboard, quit: () => app.quit() });
+    // Started by the login item: wait in the tray until the user opens the dashboard.
+    if (!startedHidden()) openDashboard();
+  });
+  // Launching the app again (e.g. its desktop icon) while it runs in the tray.
+  app.on('second-instance', () => openDashboard());
+  // Closing the window must not stop recording: the app runs on in the tray until Quit.
   app.on('window-all-closed', () => undefined);
   app.on('before-quit', () => {
     recorder.lifecycle('session_end');
     recorder.dispose();
   });
+}
+
+let dashboard: BrowserWindow | null = null;
+
+/** Shows the dashboard, or opens it again if it was closed (closing frees its memory). */
+function openDashboard(): void {
+  if (dashboard && !dashboard.isDestroyed()) {
+    if (dashboard.isMinimized()) dashboard.restore();
+    dashboard.show();
+    dashboard.focus();
+    return;
+  }
+  dashboard = createMainWindow([recordingsDir]);
 }
 
 function setupGep(gep: OverwolfGameEventPackage): void {
@@ -134,14 +155,19 @@ function setupGep(gep: OverwolfGameEventPackage): void {
   });
 }
 
-/** Subscribe to every Apex feature (null = all). GEP may need a few tries right after launch. */
+/**
+ * Subscribe to every Apex feature. Overwolf staff: the list is a filter and no list
+ * means everything (docs/overwolf/gep-and-compliance.md §3). GEP may need a few tries
+ * right after launch.
+ */
 async function registerFeatures(gep: OverwolfGameEventPackage): Promise<void> {
   for (let attempt = 1; attempt <= SET_FEATURES_ATTEMPTS; attempt++) {
     try {
       // The typings say `string[] | undefined`; Overwolf's own sample passes null for "all".
       await gep.setRequiredFeatures(APEX_GAME_ID, null as unknown as undefined);
+      // setRequiredFeatures reports nothing back; getFeatures lists what Apex supports.
       const features = await gep.getFeatures(APEX_GAME_ID);
-      log(`Subscribed to ${features.length} features.`);
+      log(`Subscribed to all features; Apex supports ${features.length}: ${features.join(', ')}.`);
       recorder.lifecycle('features_set', { attempt, features });
       await snapshotInfo(gep);
       return;

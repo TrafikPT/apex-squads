@@ -399,7 +399,7 @@ Note that the feature name and the category often differ (e.g. `me.name` has cat
 {"gameId":21566,"feature":"me","category":"me","key":"ultimate_cooldown","value":"{\"ultimate_cooldown\":\"15\"}"}
 ```
 
-Discord (#announcements, staff, 2023-02-21): `me.name` is being replaced by `game_info.player`. "We will keep the old info-update running for the near future as apps migrate between the two, until deprecating it at a later date." (The announcement's example keys `name`/`in_game_name` differ from today's `player_name`/`in_game_player_name`; our recordings match the docs.) Repo: `src/build-dataset.ts` reads `me.name` for the lobby name; the recordings carry both keys with the same value, so fall back to (or switch to) `game_info.player.player_name`.
+Discord (#announcements, staff, 2023-02-21): `me.name` is being replaced by `game_info.player`. "We will keep the old info-update running for the near future as apps migrate between the two, until deprecating it at a later date." (The announcement's example keys `name`/`in_game_name` differ from today's `player_name`/`in_game_player_name`; our recordings match the docs.) Repo: the recordings carry both keys with the same value, and `me.name` arrives with category `me` (not `game_info` as the table says). Since 2026-09-28 the recorder and `build-dataset.ts` take the name from either (`lobbyPlayerName` in `src/game-names.ts`).
 
 ### game_info
 
