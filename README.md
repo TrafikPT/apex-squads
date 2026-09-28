@@ -99,8 +99,8 @@ npm run popup:preview   # replays your latest recorded match's popups, 4 s apart
 recordings (no API key needed); see DESIGN.md §12.
 
 Which popups show, where and for how long is set in the dashboard's Settings
-tab and saved to `Apex Squads/settings.json` in the system's app-data folder
-(`%APPDATA%` on Windows); every entry point reads it before each popup.
+tab and saved to `settings.json` in the app's data folder (`%APPDATA%\Apex Squads`,
+or `APEX_SQUADS_DATA_DIR`); every entry point reads it before each popup.
 `APEX_SETTINGS_FILE=<file>` uses another file.
 
 ### Live, from the Overwolf client's log (before we had Dev Mode)
