@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Dataset, MatchFact } from '../src/ui/facts';
 import { generateMockData } from '../src/ui/mock-data';
-import { compStats, DEFAULT_FILTERS, filterMatches, groupBySession, gunLoadoutStats, kpis, legendStats, loadoutStats, matchLoadout, playSessions, rankedAccount, rankGames, regularPlayers, rpSteps, comparisonFor, squadStats, teammateStats, weaponStats } from '../src/ui/stats';
+import { compStats, DEFAULT_FILTERS, filterMatches, groupBySession, gunLoadoutStats, kpis, legendStats, loadoutStats, matchLoadout, playSessions, rankedAccount, rankGames, regularPlayers, rpLevels, rpSteps, comparisonFor, squadStats, teammateStats, weaponStats } from '../src/ui/stats';
 import { niceTicks } from '../src/ui/format';
 import { divisionFloors, rankName, rankOf } from '../src/ui/ranks';
 import { weaponClass } from '../src/ui/weapons';
@@ -13,7 +13,7 @@ function match(id: string, startedAt: Date, patch: Partial<MatchFact> = {}): Mat
   return {
     matchId: id, accountKey: 'a1', startedAt: startedAt.toISOString(), mode: 'ranked', map: 'Olympus',
     legend: 'Bangalore', placement: 10, teams: 20, kills: 2, assists: 1, knocks: 3, deaths: 1, damage: 800,
-    revivesGiven: 0, revivesReceived: 0, rpDelta: 10, rpAfter: null, rpEstimated: false, loadout: [], squadKey: '', ...patch,
+    revivesGiven: 0, revivesReceived: 0, rpDelta: 10, rpAfter: null, rpEstimated: false, rpBonus: null, loadout: [], squadKey: '', ...patch,
   };
 }
 
@@ -125,6 +125,19 @@ test('rpSteps: RP after each ranked match, with RP from unrecorded games before 
   // A filter that hides b isn't a gap: b was recorded.
   const filtered = rpSteps(all.filter((m) => m.matchId !== 'b'), all);
   assert.deepEqual(filtered.map((s) => s.unrecorded), [0, 58, 0]);
+});
+
+test('rpSteps and rpLevels: a promotion bonus is part of the level, not RP from unrecorded games', () => {
+  const t = (h: number) => new Date(2026, 8, 20, h);
+  const all = [
+    match('a', t(19), { rpDelta: 40, rpAfter: 8_460 }),
+    match('promo', t(20), { rpDelta: 50, rpBonus: 250, rpAfter: 8_760 }),
+    match('c', t(21), { rpDelta: -30, rpAfter: 8_730 }),
+    match('d', t(22), { rpDelta: 12, rpAfter: null, rpEstimated: true }),
+  ];
+  assert.deepEqual(rpSteps(all, all).map((s) => [s.level, s.cumulative, s.unrecorded]),
+    [[8_460, 40, 0], [8_760, 90, 0], [8_730, 60, 0], [8_742, 72, 0]]);
+  assert.deepEqual([...rpLevels(all)], [['a', 8_460], ['promo', 8_760], ['c', 8_730], ['d', 8_742]]);
 });
 
 test('rpSteps: across accounts only the running total, no levels or gaps', () => {

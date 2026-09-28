@@ -88,8 +88,15 @@ button, select, input { font-family: inherit; }
 }
 .view { display: grid; gap: 12px; min-height: 0; min-width: 0; align-content: start; }
 .view-overview {
-  grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: auto minmax(200px, 1fr) auto; align-content: stretch;
+  grid-template-columns: minmax(0, 1fr) 380px; grid-template-rows: auto auto minmax(140px, 1fr) auto; align-content: stretch;
+  grid-template-areas: "rank session" "highlights recent" "rp recent" "tiles tiles";
 }
+.view-overview .rank-card { grid-area: rank; }
+.view-overview .session-card { grid-area: session; }
+.view-overview .highlights-card { grid-area: highlights; }
+.view-overview .rp-card { grid-area: rp; }
+.view-overview .recent-card { grid-area: recent; }
+.view-overview .overview-tiles { grid-area: tiles; }
 /* ---------------------------------------------------------- settings */
 .main.no-filters { grid-template-rows: minmax(0, 1fr); }
 .main.with-notice { grid-template-rows: auto auto minmax(0, 1fr); }
@@ -224,13 +231,27 @@ select, input[type="date"] {
 .recent-main { display: flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums; }
 .recent-main .muted { color: var(--text-muted); font-size: 12px; }
 .recent-sub { color: var(--text-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.highlights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 12px; }
+.highlight { padding: 7px 8px; margin: 0 -2px; border-radius: 6px; min-width: 0; }
+.highlight.clickable { cursor: pointer; }
+.highlight:hover, .highlight:focus-visible { background: var(--accent-soft); outline: none; }
+.highlight-label { font: 600 10px/1 var(--font-display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+.highlight-body { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.highlight-body .legend-badge { width: 36px; height: 36px; flex: none; }
+.highlight-icon { width: 36px; height: 36px; flex: none; padding: 7px; border-radius: 50%; background: var(--surface-2);
+  fill: none; stroke: var(--text-secondary); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.highlight-text { min-width: 0; }
+.highlight-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.highlight-value { font: 600 15px/1.2 var(--font-display); color: var(--accent); font-variant-numeric: tabular-nums; }
+.highlight-sub { color: var(--text-muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.empty-highlight .highlight-sub { white-space: normal; }
 .overview-tiles .tile { justify-content: flex-start; }
 .overview-tiles .tile .value { font-size: 26px; }
 .vs { color: var(--text-muted); font-size: 12px; margin-top: 2px; min-height: 1.4em; }
 
 /* ---------------------------------------------------------- chart */
 .rp-card { display: flex; flex-direction: column; min-height: 0; }
-.chart { position: relative; flex: 1; min-height: 170px; }
+.chart { position: relative; flex: 1; min-height: 110px; }
 .chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .chart svg:focus { outline: none; }
 .chart svg:focus-visible { outline: 1px solid var(--axis); outline-offset: 4px; }
@@ -277,6 +298,9 @@ td .best { color: var(--text-primary); font-weight: 700; }
 .rank-badge { display: block; width: 32px; height: 32px; }
 td.rank-cell { padding-top: 2px; padding-bottom: 2px; }
 td.rank-cell .muted { margin-left: 4px; vertical-align: middle; }
+.matches-table td.rank-cell .rank-badge { width: 22px; height: 22px; }
+.matches-table td.rank-cell .rank-label .division { font-size: 12px; min-width: 16px; }
+td.rank-cell .promoted { color: var(--good); font-size: 11px; margin-left: 2px; vertical-align: middle; cursor: help; }
 .rank-label { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
 .rank-label .division { font: 700 14px/1 var(--font-display); letter-spacing: 0.04em; min-width: 22px; }
 .tooltip .t-rank { display: flex; align-items: center; gap: 6px; }

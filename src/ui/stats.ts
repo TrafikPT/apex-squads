@@ -171,12 +171,36 @@ export function rpSteps(matches: MatchFact[], all: MatchFact[]): RpStep[] {
     if (single) {
       const known = m.rpAfter !== null && !m.rpEstimated;
       const prev = previous.get(m.matchId);
-      if (known && prev?.rpAfter != null && !prev.rpEstimated) unrecorded = m.rpAfter! - m.rpDelta - prev.rpAfter;
-      level = known ? m.rpAfter : level === null ? null : level + m.rpDelta;
+      if (known && prev?.rpAfter != null && !prev.rpEstimated) unrecorded = rpBeforeMatch(m)! - prev.rpAfter;
+      level = known ? m.rpAfter : level === null ? null : level + m.rpDelta + (m.rpBonus ?? 0);
     }
     steps.push({ match: m, level: single ? level : null, cumulative, unrecorded, sessionStart: starts.has(m.matchId) });
   }
   return steps;
+}
+
+/** The account's RP before a ranked match with a known RP after it: the promotion bonus came during the match too. */
+export function rpBeforeMatch(m: MatchFact): number | null {
+  return m.rpAfter === null || m.rpDelta === null || m.rpEstimated ? null : m.rpAfter - m.rpDelta - (m.rpBonus ?? 0);
+}
+
+/**
+ * Each ranked match's RP right after it, per account: the real level when the
+ * game's stats came, else the previous level plus the match's RP. Matches
+ * before the account's first known level have none.
+ */
+export function rpLevels(all: MatchFact[]): Map<string, number> {
+  const levels = new Map<string, number>();
+  const last = new Map<string, number>();
+  for (const m of [...all].sort((a, b) => a.startedAt.localeCompare(b.startedAt))) {
+    if (m.mode !== 'ranked' || m.rpDelta === null) continue;
+    const prev = last.get(m.accountKey);
+    const level = m.rpAfter !== null && !m.rpEstimated ? m.rpAfter : prev === undefined ? null : Math.max(0, prev + m.rpDelta + (m.rpBonus ?? 0));
+    if (level === null) continue;
+    levels.set(m.matchId, level);
+    last.set(m.accountKey, level);
+  }
+  return levels;
 }
 
 /** The rates the Overview tiles compare. */

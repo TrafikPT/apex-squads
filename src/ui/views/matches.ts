@@ -2,7 +2,9 @@ import { el, svgEl } from '../dom';
 import type { MatchFact, TeammateFact, WeaponFact } from '../facts';
 import { fixed, fmtDateTime, fmtInt, place, signed } from '../format';
 import { legendBadge } from '../portraits';
-import { groupBySession, toLocalDay } from '../stats';
+import { rankLabel } from '../rank-badge';
+import { rankName, rankOf } from '../ranks';
+import { groupBySession, rpLevels, toLocalDay } from '../stats';
 import type { ViewContext, ViewResult } from './context';
 import { ESTIMATE_TITLE, rpCell, rpText } from './shared';
 
@@ -20,7 +22,7 @@ export function openMatch(matchId: string): void {
   revealExpanded = true;
 }
 
-const COLUMNS = 10;
+const COLUMNS = 11;
 /** Chevron, legend, time, map and squad: the session's name spans these. */
 const LEAD_COLUMNS = 5;
 /** Matches rendered per "Show more" step; whole sessions are always shown. */
@@ -42,6 +44,7 @@ export function matchesView(ctx: ViewContext): ViewResult {
   const byTogether = squadOrder(ctx);
   const guns = groupBy(ctx.data.weapons, (w) => w.matchId);
   const accountName = new Map(ctx.data.accounts.map((a) => [a.accountKey, a.name]));
+  const levels = rpLevels(ctx.data.matches);
 
   const filterKey = JSON.stringify(ctx.filters);
   if (filterKey !== shownFor) {
@@ -74,13 +77,14 @@ export function matchesView(ctx: ViewContext): ViewResult {
       dayStat(fixed(s.kd, 2), "The session's K/D: all kills over all deaths"),
       dayStat('', ''),
       dayStat(s.avgDamage === null ? '–' : fmtInt(Math.round(s.avgDamage)), 'Average damage'),
+      dayStat('', ''),
       s.rpNet === null ? dayStat('–', 'No RP data for this session')
         : dayStat(`${signed(s.rpNet)} RP`, 'Net RP for the session', s.rpNet >= 0 ? 'good' : 'bad'),
     ));
     if (!isOpen) continue;
     for (const m of day.matches) {
       const open = expanded === m.matchId;
-      const row = matchRow(ctx, m, open, byTogether);
+      const row = matchRow(ctx, m, open, byTogether, levels.get(m.matchId) ?? null);
       body.append(row);
       if (open) {
         expandedRow = row;
@@ -93,7 +97,7 @@ export function matchesView(ctx: ViewContext): ViewResult {
 
   const head = el('tr', {});
   for (const [label, num] of [['', false], ['Legend', false], ['Time', false], ['Map', false], ['Squad', false], ['Place', true],
-    ['K/D', true], ['K / D / A / Kn', true], ['Damage', true], ['RP', true]] as const) {
+    ['K/D', true], ['K / D / A / Kn', true], ['Damage', true], ['Rank', false], ['RP', true]] as const) {
     head.append(el('th', { class: num ? 'num' : '' }, label));
   }
   const scroll = el('div', { class: 'table-scroll' }, el('table', { class: 'matches-table' }, el('thead', {}, head), body));
@@ -144,7 +148,8 @@ function onActivate(row: HTMLElement, action: () => void): void {
   });
 }
 
-function matchRow(ctx: ViewContext, m: MatchFact, open: boolean, byTogether: (a: string, b: string) => number): HTMLElement {
+function matchRow(ctx: ViewContext, m: MatchFact, open: boolean, byTogether: (a: string, b: string) => number,
+  level: number | null): HTMLElement {
   const squad = el('td', {});
   [...(ctx.squadOf.get(m.matchId) ?? [])].sort(byTogether).forEach((p, i) => {
     if (i) squad.append(', ');
@@ -162,6 +167,7 @@ function matchRow(ctx: ViewContext, m: MatchFact, open: boolean, byTogether: (a:
     el('td', { class: 'num' }, (m.kills / Math.max(m.deaths, 1)).toFixed(2)),
     el('td', { class: 'num' }, `${m.kills} / ${m.deaths} / ${m.assists} / ${m.knocks}`),
     el('td', { class: 'num' }, fmtInt(m.damage)),
+    rankCell(m, level),
     rpCell(m.rpDelta, m.rpEstimated),
   );
   onActivate(row, () => {
@@ -169,6 +175,19 @@ function matchRow(ctx: ViewContext, m: MatchFact, open: boolean, byTogether: (a:
     ctx.setView('matches');
   });
   return row;
+}
+
+/** The rank right after a ranked match, as a small badge; ▲ when the match promoted into a new tier. */
+function rankCell(m: MatchFact, level: number | null): HTMLElement {
+  const td = el('td', { class: 'rank-cell' });
+  if (level === null) return td;
+  const r = rankOf(level);
+  const promoted = m.rpBonus !== null;
+  const title = `${rankName(r.tier, r.division)} · ${fmtInt(level)} RP after this match` +
+    (promoted ? `. Promoted to ${r.tier}: the ${signed(m.rpBonus!)} RP promotion bonus isn't counted in the match's RP` : '');
+  td.append(rankLabel(r.tier, r.division, title));
+  if (promoted) td.append(el('span', { class: 'promoted', title }, '▲'));
+  return td;
 }
 
 // ---------------------------------------------------------------- detail panel
@@ -185,7 +204,9 @@ function matchDetail(ctx: ViewContext, m: MatchFact, mates: TeammateFact[], guns
       el('div', {}, el('div', { class: `detail-place${m.placement === 1 ? ' win' : ''}` }, `#${m.placement}`),
         el('div', { class: 'detail-meta' }, `of ${m.teams} squads`)),
       m.rpDelta === null ? '' : el('div', {}, el('div', { class: `detail-rp ${m.rpDelta >= 0 ? 'good' : 'bad'}` }, rpText(m.rpDelta, m.rpEstimated)),
-        el('div', { class: 'detail-meta', ...(m.rpEstimated ? { title: ESTIMATE_TITLE } : {}) }, m.rpEstimated ? 'RP (estimate)' : 'RP')),
+        el('div', { class: 'detail-meta', ...(m.rpEstimated ? { title: ESTIMATE_TITLE } : {}) }, m.rpEstimated ? 'RP (estimate)' : 'RP'),
+        m.rpBonus === null ? '' : el('div', { class: 'detail-meta', title: "The game's bonus for reaching a new tier, left out of the match's RP" },
+          `${signed(m.rpBonus)} promotion bonus`)),
     ),
   );
 

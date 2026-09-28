@@ -1,7 +1,8 @@
 /**
  * The first screen: where I stand (rank now, from the game's season stats, so
- * it shows before any match is recorded), how the last session went, RP match
- * by match, the recent matches, and the selection's numbers against my season.
+ * it shows before any match is recorded), how the last session went, the best
+ * of each other screen (legends, squads, weapons, maps), RP match by match, the
+ * recent matches, and the selection's numbers against my season.
  */
 import { el, svgEl, svgText } from '../dom';
 import type { Account, MatchFact } from '../facts';
@@ -9,11 +10,13 @@ import { fixed, fmtDateTime, fmtInt, niceTicks, pct, signed, xTickIndices } from
 import { legendBadge } from '../portraits';
 import { rankBadge } from '../rank-badge';
 import { rankName, rankOf } from '../ranks';
-import { Comparison, comparisonFor, kpis, playSessions, rankedAccount, rankGames, Rates, RpStep, rpSteps } from '../stats';
+import { Comparison, comparisonFor, Kpis, kpis, legendStats, loadoutStats, playSessions, rankedAccount, rankGames, Rates, RpStep, rpSteps,
+  teammateStats, weaponStats } from '../stats';
+import { OTHER_WEAPON, weaponLabel } from '../weapons';
 import type { ViewContext, ViewResult } from './context';
 import { openMatch } from './matches';
 import { drawRankAxis, rankTicks } from './rank-axis';
-import { clickable, rpText } from './shared';
+import { clickable, MIN_SAMPLE, rpPerMatch, rpText } from './shared';
 
 const RECENT_MATCHES = 5;
 /** Within this share of the value compared with, a tile shows "≈" instead of better or worse. */
@@ -26,6 +29,7 @@ export function overviewView(ctx: ViewContext): ViewResult {
     node: el('div', { class: 'view view-overview' },
       rankCard(ctx, account),
       sessionCard(ctx),
+      highlightsCard(ctx),
       chart.card,
       recentCard(ctx),
       tiles(ctx),
@@ -123,6 +127,120 @@ function gameLine(ctx: ViewContext, label: string, m: MatchFact): HTMLElement {
   return line;
 }
 
+// ---------------------------------------------------------------- highlights
+
+/** Icons for the picks without a legend portrait (the sidebar's, for the screen they open). */
+const ICONS = {
+  weapon: 'M12 3v4M12 17v4M3 12h4M17 12h4M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
+  map: 'M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10zM12 13a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+};
+
+interface Highlight {
+  label: string;
+  visual: HTMLElement | SVGElement;
+  name: string;
+  value: string;
+  sub: string;
+  open: () => void;
+}
+
+/**
+ * The best of each other screen in this selection, each opening that screen:
+ * picks need MIN_SAMPLE games, like the "best" rows there.
+ */
+function highlightsCard(ctx: ViewContext): HTMLElement {
+  const m = ctx.matches;
+  const legends = legendStats(m).filter((r) => r.games >= MIN_SAMPLE);
+  const games = (n: number) => `${n} ${n === 1 ? 'game' : 'games'}`;
+
+  /** "Best" needs something to beat: with a single candidate, say so. */
+  const of = (sub: string, candidates: unknown[], noun: string) => (candidates.length === 1 ? `${sub} · only ${noun} with ${MIN_SAMPLE}+ games` : sub);
+  const rpLegends = legends.filter((r) => r.me.rpMatches >= MIN_SAMPLE);
+  const mates = teammateStats(ctx.data, m, ctx.regulars, MIN_SAMPLE);
+  const guns = weaponStats(ctx.data, m).filter((r) => r.weapon !== OTHER_WEAPON && r.matches >= MIN_SAMPLE);
+  const maps = mapStats(m).filter((r) => r.games >= MIN_SAMPLE);
+  const loadouts = loadoutStats(ctx.data, m, MIN_SAMPLE);
+  const byWins = best(legends, (r) => r.me.winRate ?? 0, (r) => r.games);
+  const byRp = best(rpLegends, (r) => rpPerMatch(r.me)!, (r) => r.me.rpMatches);
+  const mate = best(mates, (r) => r.me.top5Rate ?? 0, (r) => r.games);
+  const gun = best(guns, (r) => r.kills, (r) => r.damage);
+  const map = best(maps, (r) => -(r.me.avgPlacement ?? 99), (r) => r.games);
+  const loadout = best(loadouts, (r) => r.me.kd ?? 0, (r) => r.games);
+
+  const items: (Highlight | string)[] = [
+    byWins ? {
+      label: 'Best legend · wins', visual: legendBadge(byWins.legend), name: byWins.legend,
+      value: `${pct(byWins.me.winRate)} win rate`, sub: of(`${games(byWins.games)} · top 5 ${pct(byWins.me.top5Rate)}`, legends, 'legend'),
+      open: () => ctx.setView('legends'),
+    } : 'Best legend · wins',
+    byRp ? {
+      label: 'Best legend · RP', visual: legendBadge(byRp.legend), name: byRp.legend,
+      value: `${signed(Math.round(rpPerMatch(byRp.me)!))} RP a match`, sub: of(`${games(byRp.me.rpMatches)} ranked`, rpLegends, 'legend'),
+      open: () => ctx.setView('legends'),
+    } : 'Best legend · RP',
+    mate ? {
+      label: 'Best teammate', visual: legendBadge(mate.topLegend), name: ctx.playerName(mate.playerKey),
+      value: `top 5 ${pct(mate.me.top5Rate)} together`, sub: of(games(mate.games), mates, 'teammate'),
+      open: () => ctx.setView('squads'),
+    } : 'Best teammate',
+    gun ? {
+      label: 'Top gun', visual: icon(ICONS.weapon), name: weaponLabel(gun.weapon),
+      value: `${fmtInt(gun.kills)} ${gun.kills === 1 ? 'kill' : 'kills'}`, sub: of(`${pct(gun.damageShare)} of your damage`, guns, 'gun'),
+      open: () => ctx.setView('weapons'),
+    } : 'Top gun',
+    map ? {
+      label: 'Best map', visual: icon(ICONS.map), name: map.map,
+      value: `#${map.me.avgPlacement!.toFixed(1)} avg place`, sub: of(games(map.games), maps, 'map'),
+      open: () => ctx.setView('matches', { map: map.map }),
+    } : 'Best map',
+    loadout ? {
+      label: 'Best loadout', visual: icon(ICONS.weapon), name: loadout.weapons.map(weaponLabel).join(' + '),
+      value: `K/D ${fixed(loadout.me.kd, 2)}`, sub: of(games(loadout.games), loadouts, 'loadout'),
+      open: () => ctx.setView('weapons'),
+    } : 'Best loadout',
+  ];
+
+  const grid = el('div', { class: 'highlights' });
+  for (const item of items) {
+    if (typeof item === 'string') {
+      grid.append(el('div', { class: 'highlight empty-highlight' },
+        el('div', { class: 'highlight-label' }, item),
+        el('div', { class: 'highlight-sub' }, `Needs ${MIN_SAMPLE} games in this selection`)));
+      continue;
+    }
+    const cell = el('div', { class: 'highlight' },
+      el('div', { class: 'highlight-label' }, item.label),
+      el('div', { class: 'highlight-body' }, item.visual,
+        el('div', { class: 'highlight-text' },
+          el('div', { class: 'highlight-name' }, item.name),
+          el('div', { class: 'highlight-value' }, item.value),
+          el('div', { class: 'highlight-sub' }, item.sub))));
+    clickable(cell, `Open ${item.label.split(' · ')[0].toLowerCase()}`, item.open);
+    grid.append(cell);
+  }
+  return el('section', { class: 'card highlights-card' },
+    el('h2', { class: 'card-title' }, 'Highlights', el('span', { class: 'aside' }, `best in this selection · ${MIN_SAMPLE}+ games each`)),
+    grid);
+}
+
+/** The row with the highest score; ties go to the higher tiebreak (more games). */
+function best<R>(rows: R[], score: (r: R) => number, tiebreak: (r: R) => number): R | undefined {
+  return [...rows].sort((a, b) => score(b) - score(a) || tiebreak(b) - tiebreak(a))[0];
+}
+
+/** My results per map in the selection. */
+function mapStats(matches: MatchFact[]): { map: string; games: number; me: Kpis }[] {
+  const byMap = new Map<string, MatchFact[]>();
+  for (const m of matches) byMap.set(m.map, [...(byMap.get(m.map) ?? []), m]);
+  return [...byMap].map(([map, list]) => ({ map, games: list.length, me: kpis(list) }));
+}
+
+function icon(path: string): SVGElement {
+  const svg = svgEl('svg', { class: 'highlight-icon', viewBox: '0 0 24 24' });
+  svg.append(svgEl('path', { d: path }));
+  return svg;
+}
+
 // ---------------------------------------------------------------- RP, match by match
 
 function rpCard(ctx: ViewContext): { card: HTMLElement; draw?: () => void } {
@@ -140,7 +258,7 @@ function rpCard(ctx: ViewContext): { card: HTMLElement; draw?: () => void } {
   const parts = [`${signed(net)} RP in ${steps.length} ${steps.length === 1 ? 'match' : 'matches'}`];
   if (unrecorded) parts.push(`${signed(unrecorded)} in games not recorded`);
   if (single) {
-    const start = steps[0].level! - steps[0].match.rpDelta!;
+    const start = steps[0].level! - steps[0].match.rpDelta! - (steps[0].match.rpBonus ?? 0);
     parts.unshift(`${fmtInt(start)} → ${fmtInt(steps[steps.length - 1].level!)}`);
   } else if (rankedAccount(ctx.matches) === null) {
     parts.push('running total: pick one account to see your rank');
@@ -153,7 +271,7 @@ function rpCard(ctx: ViewContext): { card: HTMLElement; draw?: () => void } {
 
 function drawSteps(ctx: ViewContext, host: HTMLElement, steps: RpStep[], ranked: boolean): void {
   const width = host.clientWidth || 600;
-  const height = Math.max(170, host.clientHeight);
+  const height = Math.max(120, host.clientHeight);
   const m = { top: 10, right: 12, bottom: 22, left: ranked ? 80 : 44 };
   const w = width - m.left - m.right;
   const h = height - m.top - m.bottom;

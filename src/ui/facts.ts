@@ -44,6 +44,13 @@ export interface MatchFact {
   rpAfter: number | null;
   /** rpDelta is src/ui/rp-formula.ts's estimate, not the real change. */
   rpEstimated: boolean;
+  /**
+   * The bonus RP for a promotion into a new tier during this match, left out of
+   * rpDelta so the match shows what it earned (rpAfter still includes it); null
+   * when there was no promotion. Worked out as the real change minus the
+   * formula's estimate, since the game doesn't report the bonus.
+   */
+  rpBonus: number | null;
   /** The one or two guns I held longest (GEP's weapon slots); empty without slot data. */
   loadout: string[];
   /** Sorted teammate player keys joined with '|'. */

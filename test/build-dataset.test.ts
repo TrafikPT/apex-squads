@@ -240,6 +240,20 @@ test("a ranked match's RP is the change across the season stats around it", () =
   assert.deepEqual([m.rpDelta, m.rpAfter, m.rpEstimated], [50, 8_650, false]);
 });
 
+test('a promotion into a new tier: the match keeps what it earned, the rest is the promotion bonus', () => {
+  const lines = oneMatch([event('m1', 'kill', '1'), rankedStats(11, 8_700, '2026-09-24T12:00:30.000Z')]);
+  const [m] = buildDataset([rankedStats(10, 8_400), ...lines]).dataset.matches;
+  // Gold I to Platinum IV. Earned: Gold entry 38; 3rd place 70; one kill at 3rd 18.
+  assert.deepEqual([m.rpDelta, m.rpBonus, m.rpAfter, m.rpEstimated], [-38 + 70 + 18, 300 - 50, 8_700, false]);
+});
+
+test("crossing into a tier within the formula's error is no promotion bonus", () => {
+  const lines = oneMatch([event('m1', 'kill', '1'), rankedStats(11, 8_540, '2026-09-24T12:00:30.000Z')]);
+  const [m] = buildDataset([rankedStats(10, 8_480), ...lines]).dataset.matches;
+  // Gold I to Platinum IV, but +60 is within 25 of the formula's +50.
+  assert.deepEqual([m.rpDelta, m.rpBonus], [60, null]);
+});
+
 test('until the stats come, the formula estimates the RP, flagged as such', () => {
   const lines = oneMatch([event('m1', 'kill', '1')]);
   const [m] = buildDataset([rankedStats(10, 8_600), ...lines]).dataset.matches;

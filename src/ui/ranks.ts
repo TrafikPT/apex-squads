@@ -20,6 +20,11 @@ const TABLE = [
 /** Each tier and the RP where it starts. */
 export const TIERS = TABLE.map((t) => ({ tier: t.tier, floor: t.divisions[0] }));
 
+/** A tier's place in the ladder: Rookie 0, Bronze 1, ... Master 6. */
+export function tierIndex(tier: string): number {
+  return TIERS.findIndex((t) => t.tier === tier);
+}
+
 const ROMAN = ['I', 'II', 'III', 'IV'];
 
 export interface Rank {

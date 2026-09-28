@@ -8,7 +8,7 @@
 import { baseName, legendName, lobbyPlayerName, mapName, weaponName, weaponOrOther } from './game-names';
 import type { RecordLine } from './recorder';
 import type { Account, Dataset, MatchFact, Mode, Player, SeasonFact, TeammateFact, WeaponFact } from './ui/facts';
-import { rankOf } from './ui/ranks';
+import { rankOf, tierIndex } from './ui/ranks';
 import { estimateRp } from './ui/rp-formula';
 
 export interface BuildResult {
@@ -100,7 +100,7 @@ export function buildDataset(lines: RecordLine[]): BuildResult {
     }
   }
   matches.sort((a, b) => a.startedAt.localeCompare(b.startedAt));
-  estimateMissingRp(matches, rpBefore);
+  settleRp(matches, rpBefore);
 
   const seasonStats = seasonFacts(lines, sessionMatches,
     new Map([...accounts].map(([key, a]) => [baseName(a.name), key])));
@@ -294,6 +294,7 @@ function buildMatch(m: MatchLines, snapshots: Record<Mode, StatsSnapshot[]>) {
     rpDelta: mode === 'ranked' && bracket ? bracket.after.rp - bracket.before.rp : null,
     rpAfter: mode === 'ranked' && bracket ? bracket.after.rp : null,
     rpEstimated: false,
+    rpBonus: null,
     loadout: heldLongest(m.own),
     squadKey: mates.map((t) => t.key).sort().join('|'),
   };
@@ -370,12 +371,18 @@ function statsBracket(snaps: StatsSnapshot[], startAt: number) {
   return after && after.games === before.games + 1 && after.season === before.season ? { before, after } : null;
 }
 
+/** Less than this over the formula's estimate is the formula's error, not a promotion bonus. */
+const MIN_PROMOTION_BONUS = 25;
+
 /**
  * Ranked matches without a real RP change (the stats haven't arrived yet, or
- * never did) get the formula's estimate, flagged so the UI can say so. Walks
+ * never did) get the formula's estimate, flagged so the UI can say so. A match
+ * that promoted into a new tier keeps the formula's estimate as what it earned
+ * and the rest as the promotion bonus (rpBonus): the game adds a bonus then,
+ * and counting it as the match's RP made promotion matches look huge. Walks
  * each account's matches in order, for the top-5 streak and the RP before.
  */
-function estimateMissingRp(matches: MatchFact[], rpBefore: Map<string, number>): void {
+function settleRp(matches: MatchFact[], rpBefore: Map<string, number>): void {
   const perAccount = new Map<string, { streak: number; rp: number | null }>();
   for (const m of matches) {
     if (m.mode !== 'ranked') continue;
@@ -383,9 +390,17 @@ function estimateMissingRp(matches: MatchFact[], rpBefore: Map<string, number>):
     if (!acc) perAccount.set(m.accountKey, (acc = { streak: 0, rp: null }));
     acc.streak = m.placement >= 1 && m.placement <= 5 ? acc.streak + 1 : 0;
     const before = rpBefore.get(m.matchId) ?? acc.rp;
+    const estimate = () => estimateRp({ placement: m.placement, kills: m.kills, assists: m.assists, rpBefore: before!, topFiveStreak: acc!.streak });
     if (m.rpDelta === null && before !== null && m.placement > 0) {
-      m.rpDelta = estimateRp({ placement: m.placement, kills: m.kills, assists: m.assists, rpBefore: before, topFiveStreak: acc.streak });
+      m.rpDelta = estimate();
       m.rpEstimated = true;
+    } else if (m.rpDelta !== null && m.rpAfter !== null && before !== null && m.placement > 0
+      && tierIndex(rankOf(m.rpAfter).tier) > tierIndex(rankOf(before).tier)) {
+      const earned = estimate();
+      if (m.rpDelta - earned >= MIN_PROMOTION_BONUS) {
+        m.rpBonus = m.rpDelta - earned;
+        m.rpDelta = earned;
+      }
     }
     acc.rp = m.rpAfter ?? (before !== null && m.rpDelta !== null ? before + m.rpDelta : acc.rp);
   }

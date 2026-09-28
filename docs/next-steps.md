@@ -133,6 +133,10 @@ Order within this block is flexible. Submission form: https://wkf.ms/3KL8b1m.
   delete when no longer needed.
 
 ## Done
+- 2026-09-28: Overview summarizes the other screens (six highlights: best legend by
+  wins and by RP, best teammate, top gun, best map, best loadout) with a compact RP
+  chart; promotion bonus RP left out of a match's RP; a Rank column in Matches.
+  Check the promotion bonus against the first real promotion (DESIGN.md §5).
 - 2026-09-28: app icon "Trio" (build/icon.svg, `npm run icons`) in the tray, window
   and title bar.
 - 2026-09-28: first-run welcome (skippable, reopened from Help), a notice over the
