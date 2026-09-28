@@ -3,7 +3,7 @@
 A Windows ow-electron app for Apex Legends: it records every Overwolf game event
 (GEP) to JSONL, builds a stats dashboard from the recordings, and shows kill/death
 and lobby popup cards. Read README.md for commands and DESIGN.md for decisions and
-their dates.
+their dates. What to work on next: docs/next-steps.md (keep it current).
 
 ## Overwolf
 Don't reread Overwolf's docs: `docs/overwolf/` distills all of them (2026-09-28),
