@@ -11,6 +11,7 @@ import './styles.css';
 import { el, svgEl } from './dom';
 import './bridge';
 import type { Account, Dataset } from './facts';
+import { INITIAL_STATUS, statusLine, type GameStatus } from './game-status';
 import { uniqueSorted } from './format';
 import { generateMockData } from './mock-data';
 import { rankName } from './ranks';
@@ -83,6 +84,8 @@ let filters: Filters = { ...DEFAULT_FILTERS };
 const params = new URLSearchParams(location.search);
 const VIEWS: View[] = ['overview', 'squads', 'weapons', 'legends', 'matches', 'seasons', 'settings', 'help'];
 let view: View = VIEWS.find((v) => v === params.get('view')) ?? 'overview';
+/** The title bar's status, from the app (src/game-status.ts). */
+let status: GameStatus = INITIAL_STATUS;
 /** The first-run welcome is open (?welcome=1 opens it, for screenshots). */
 let welcome = params.get('welcome') === '1';
 
@@ -123,12 +126,22 @@ async function start(): Promise<void> {
     welcome = true;
     render();
   }, () => undefined);
+  window.apex?.loadStatus().then(showStatus, () => undefined);
+  window.apex?.onStatus(showStatus);
   // A match finished: new numbers, same view and filters.
   window.apex?.onDatasetChanged(async () => {
     if (params.get('data') === 'sample') return;
     useData(await loadData());
     renderInPlace();
   });
+}
+
+/** New status: the title bar changes in place; Settings shows the helper button when it's needed. */
+function showStatus(next: GameStatus): void {
+  const cardsChanged = next.cards !== status.cards;
+  status = next;
+  if (cardsChanged && view === 'settings') renderInPlace();
+  else root.querySelector('.titlebar .status')?.replaceWith(statusBadge());
 }
 
 /**
@@ -183,6 +196,7 @@ function render(): void {
     playerName: (key) => names.get(key) ?? key,
     regulars,
     squadOf,
+    status,
     showWelcome: () => {
       welcome = true;
       render();
@@ -269,8 +283,17 @@ function titleBar(): HTMLElement {
     mark,
     el('span', { class: 'name' }, 'Apex Squads'),
     ...(sample ? [el('span', { class: 'pill' }, 'Sample data')] : []),
-    el('span', { class: 'status' }, el('span', { class: 'dot' }), 'Waiting for Apex Legends'),
+    statusBadge(),
   );
+}
+
+function statusBadge(): HTMLElement {
+  const line = statusLine(status);
+  const content = [el('span', { class: 'dot' }), line.text];
+  if (!line.toSettings) return el('span', { class: `status ${line.tone}`, title: line.detail }, ...content);
+  const button = el('button', { type: 'button', class: `status ${line.tone}`, title: line.detail }, ...content);
+  button.addEventListener('click', () => setView('settings'));
+  return button;
 }
 
 // ---------------------------------------------------------------- sidebar

@@ -1,5 +1,6 @@
 import type { Settings } from './app-settings';
 import type { Dataset } from './facts';
+import type { GameStatus } from './game-status';
 import type { Popup } from './popup-card';
 
 /** Exposed by src/preload.ts. Absent when the UI runs outside the app (plain browser). */
@@ -17,6 +18,11 @@ export interface ApexBridge {
   openRecordingsFolder(): Promise<void>;
   /** Where the app keeps its data, for Settings. */
   dataInfo(): Promise<DataInfo>;
+  /** The title bar's status: recording, Overwolf's game data health, where cards go. */
+  loadStatus(): Promise<GameStatus>;
+  onStatus(callback: (status: GameStatus) => void): void;
+  /** For elevated Apex: installs the overlay's helper (Windows asks first). */
+  installOverlayHelper(): Promise<'installed' | 'declined' | 'failed' | 'unavailable'>;
 }
 
 export interface DataInfo {

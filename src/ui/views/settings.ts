@@ -61,6 +61,8 @@ export function settingsView(ctx: ViewContext): ViewResult {
     el('div', { class: 'settings-actions' }, test,
       el('span', { class: 'footnote' }, 'In a match they show inside the game. If the overlay can’t get into Apex, they show over it only in borderless window mode (Apex: Settings → Video → Display Mode).')),
   );
+  const helper = helperRow(ctx);
+  if (helper) card.insertBefore(helper, card.children[1]);
   if (!bridge) card.append(el('div', { class: 'footnote' }, 'Settings are saved by the app; this browser preview only shows them.'));
   if (loadError) {
     card.insertBefore(el('div', { class: 'settings-error' },
@@ -81,6 +83,55 @@ export function settingsView(ctx: ViewContext): ViewResult {
     // Re-rendered while capturing: the key button keeps the focus that receives the key.
     mounted: () => node.querySelector<HTMLElement>('.key-button.capturing')?.focus(),
   };
+}
+
+// ---------------------------------------------------------------- elevated Apex
+
+type HelperState = 'installing' | 'installed' | 'declined' | 'failed' | 'unavailable';
+/** The helper install from this screen: running, or how it went. */
+let helperState: HelperState | null = null;
+
+const HELPER_RESULTS: Record<HelperState, string> = {
+  installing: 'Windows is asking for permission…',
+  installed: 'Done. The cards move into the game within a few seconds, and from now on whenever Apex starts.',
+  declined: 'Windows didn’t get permission, so the cards stay in their own window. You can try again.',
+  failed: 'It couldn’t be installed. Help → Report a problem has the app’s log.',
+  unavailable: 'This version of Overwolf’s overlay can’t do it; the cards stay in their own window.',
+};
+
+/**
+ * Apex runs as administrator and the overlay can't get in without its helper
+ * (src/game-overlay.ts). The Windows permission prompt (UAC) only ever comes
+ * from this button: the user asked, and isn't mid-match.
+ */
+function helperRow(ctx: ViewContext): HTMLElement | null {
+  const bridge = window.apex;
+  const needed = ctx.status.cards === 'needs-helper';
+  if (!bridge || (!needed && helperState !== 'installed')) return null;
+  if (!needed) {
+    return el('div', { class: 'setting helper' },
+      el('div', { class: 'setting-text' }, el('div', { class: 'setting-title' }, 'Cards inside the game'),
+        el('div', { class: 'setting-help' }, HELPER_RESULTS.installed)));
+  }
+  const allow = el('button', { type: 'button', class: 'button' }, 'Allow');
+  if (helperState === 'installing') allow.setAttribute('disabled', '');
+  allow.addEventListener('click', () => {
+    helperState = 'installing';
+    ctx.setView('settings');
+    void bridge.installOverlayHelper().then((result) => {
+      helperState = result;
+      ctx.setView('settings');
+    }, () => {
+      helperState = 'failed';
+      ctx.setView('settings');
+    });
+  });
+  const why = 'Apex runs as administrator, so Overwolf’s overlay needs a one-time helper to show the cards inside it. ' +
+    'Windows asks for permission. Until then they show in their own window.';
+  return el('div', { class: 'setting helper' },
+    el('div', { class: 'setting-text' }, el('div', { class: 'setting-title' }, 'Cards inside the game'),
+      el('div', { class: 'setting-help' }, helperState ? `${why} ${HELPER_RESULTS[helperState]}` : why)),
+    allow);
 }
 
 // ---------------------------------------------------------------- hotkeys

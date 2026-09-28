@@ -1,7 +1,8 @@
 /**
  * The only way the app's windows reach the main process (they're sandboxed):
  * `window.apex.loadDataset()`, `onDatasetChanged()` and the settings calls for
- * the dashboard, `onPopup()` for the popup, `openRecordingsFolder()` for Help.
+ * the dashboard, `onPopup()` for the popup, `openRecordingsFolder()` for Help,
+ * `loadStatus()`/`onStatus()` for the title bar.
  */
 import { contextBridge, ipcRenderer } from 'electron';
 
@@ -18,4 +19,9 @@ contextBridge.exposeInMainWorld('apex', {
   },
   openRecordingsFolder: () => ipcRenderer.invoke('apex:open-recordings'),
   dataInfo: () => ipcRenderer.invoke('apex:data-info'),
+  loadStatus: () => ipcRenderer.invoke('apex:status'),
+  onStatus: (callback: (status: unknown) => void) => {
+    ipcRenderer.on('apex:status-changed', (_event, status) => callback(status));
+  },
+  installOverlayHelper: () => ipcRenderer.invoke('apex:install-overlay-helper'),
 });

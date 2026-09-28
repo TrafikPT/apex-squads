@@ -31,8 +31,11 @@ The list is in [overwolf/README.md](overwolf/README.md#open-questions-ask-devrel
 - Record the answers in overwolf/README.md ("Findings from our own use") and
   update this list.
 
-### 3. Test the in-game overlay and hotkeys on Windows
-Coded on macOS on 2026-09-28, where neither can run (DESIGN.md §12, "Popups").
+### 3. Test the in-game overlay, hotkeys and title-bar status on Windows
+Coded on macOS on 2026-09-28, where neither can run (DESIGN.md §12, "Popups" and
+"Status"). `npm run overlay:check` runs the real card window and hotkeys against a
+fake overlay (`src/fake-overlay.ts`) on any OS: 23 checks, all passing on macOS.
+It tests our side only; the checklist below is Overwolf's side.
 - **Overlay** (`src/game-overlay.ts`, `src/popup-window.ts`): `"overlay"` is in
   `overwolf.packages`; on `game-launched` for Apex it injects, and once the game
   window's size is known the cards go in an overlay window (`squad-cards`:
@@ -46,6 +49,16 @@ Coded on macOS on 2026-09-28, where neither can run (DESIGN.md §12, "Popups").
   enters or leaves the game. Rebindable in Settings → Hotkeys, where a key used
   by the other action is refused. The session's first card carries the reminder
   ("F9 hides a card · F10 turns cards off").
+- **Elevated Apex** (run as administrator): after the injection error, if the
+  overlay's helper is missing, the title bar says "Cards can't show in the game"
+  and Settings → Popups has an Allow button: it installs the helper (UAC prompt)
+  and asks the overlay to try the running game again (`requestGameInjection`).
+  Never prompted on its own, since UAC would take focus from the game.
+- **Title bar status** (`src/game-status.ts`, `src/ui/game-status.ts`): Overwolf's
+  `21566_prod.json` every 10 minutes and when Apex starts, plus what the recorder
+  and overlay see: "Waiting for Apex Legends", "Recording Apex Legends", "Apex
+  game data is off", "Some Apex game data is down", "Not recording: Apex runs as
+  administrator", "Cards can't show in the game" (links to Settings).
 - **Blocked** like item 1 while Overwolf has Apex's overlay off, except the
   `APEX_OVERLAY_ANY_GAME=1` check below.
 
@@ -66,9 +79,20 @@ Checklist (`npm start`, then read the app's log):
 - [ ] Without the overlay (Overwolf client closed, or the Apex overlay off): the
   `globalShortcut` fallback, the "taken by another app" log line, and a key
   changed in Settings working at once.
-- [ ] **Elevated Apex** (run as administrator): injection fails today and the
-  cards fall back to their own window. Add `installHighElevationHelper()` (a UAC
-  prompt; 1223 means the user said no) and tell the user why.
+- [ ] Windowed mode: the log line "Overlay: Apex Legends's window is WxH, bounds
+  …, screen …" gives the game window's screen position, to compare with where the
+  card lands.
+- [ ] **Elevated Apex** (run as administrator): the log says the helper is
+  missing, the title bar and Settings say so, Allow shows the UAC prompt; No
+  leaves the cards in their window, Yes gets them into the running game without
+  restarting it. Also GEP's `elevated-privileges-required`: the title bar says
+  "Not recording: Apex runs as administrator".
+- [ ] Title bar: "Apex Legends found" then "Recording Apex Legends" when Apex
+  starts, "Waiting for Apex Legends" after it closes. On macOS too:
+  `npm run app:preview` shows the real Overwolf status, so from 2026-09-29 it
+  should say "Apex game data is off" (and the log shows the file's state).
+  Note what the file says during the disable (`maintenance_msg`,
+  `disabled_electron`) in overwolf/gep-and-compliance.md §5.
 - [ ] A real match shows the cards at the right moments; then the old window
   can go once the overlay has proven itself.
 - Not built, decide after trying it: a "show the last card again" key (TRN uses
@@ -85,9 +109,6 @@ Order within this block is flexible. Submission form: https://wkf.ms/3KL8b1m.
   "report a problem" button that opens the recordings folder, but nowhere to send
   a report. Pick one (a Discord server or an email address) and link it from Help;
   Overwolf expects a support channel (product-guidelines.md §5.3).
-- **Game-events status in the dashboard**: read `21566_prod.json` and say when
-  Apex's game data is down (product-guidelines.md §4.4). The title bar's "Waiting
-  for Apex Legends" is fixed text today; make it reflect the game and the status.
 - Keep Help's FAQ and "What's new" current with each release (src/ui/views/help.ts).
 - **Launch behavior, finish on Windows.** Done on macOS (2026-09-28): tray icon
   with Open / Start with Windows / Quit; closing the window keeps
@@ -98,7 +119,19 @@ Order within this block is flexible. Submission form: https://wkf.ms/3KL8b1m.
   (QA flagged an electron app for "no launch events"; opening the dashboard would
   take focus from the game).
 - **Terms of Use and Privacy Policy** on public URLs without login; the
-  installer must ask users to accept them.
+  installer must ask users to accept them. Drafts (2026-09-28, not reviewed by a
+  lawyer) in [legal/](legal/), checked against the code and
+  overwolf/setup-and-release.md §7. To decide before publishing, besides the
+  [BRACKETED] placeholders:
+  - other players' names and IDs in recordings: get advice on who is the
+    controller for data kept only on the user's PC, and what those players are owed;
+  - whether release builds ship an apexlegendsstatus key (then every user's EA ID
+    goes there under ours) or the lookup stays off;
+  - whether uninstalling deletes `%APPDATA%\Apex Squads`;
+  - the minimum age (check Apex's rating and EA's account rules);
+  - what contact details an individual developer must publish;
+  - how long recordings sent with problem reports are kept (they hold other
+    players' data).
 - **Packaging and signing:** point the builder's `win.icon` at `build/icon.ico`,
   and upload `build/store-icon-55.png` as the store listing's app icon.
   `@overwolf/ow-electron-builder` 26.9.2, the Overwolf
@@ -130,6 +163,9 @@ Order within this block is flexible. Submission form: https://wkf.ms/3KL8b1m.
   delete when no longer needed.
 
 ## Done
+- 2026-09-28: the title bar's status (game recording, Overwolf's Apex game data,
+  where the cards go), replacing the fixed "Waiting for Apex Legends"; Help's FAQ
+  says what it means. Windows parts are in item 3's checklist.
 - 2026-09-28: Settings, the rest: a Hotkeys card (item 3) and a Your data card
   (recordings folder, sessions and size, the settings file). No field for the
   apexlegendsstatus key: all it gives is the ranked season's start date. Later,

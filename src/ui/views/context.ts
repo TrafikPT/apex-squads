@@ -1,4 +1,5 @@
 import type { Dataset, MatchFact } from '../facts';
+import type { GameStatus } from '../game-status';
 import type { Filters } from '../stats';
 
 export type View = 'overview' | 'squads' | 'weapons' | 'legends' | 'matches' | 'seasons' | 'settings' | 'help';
@@ -15,6 +16,8 @@ export interface ViewContext {
   /** Teammates with 3+ games together: shown as friends, everyone else is a random. */
   regulars: Set<string>;
   squadOf: Map<string, Set<string>>;
+  /** The title bar's status: Settings reads where the cards can go. */
+  status: GameStatus;
   /** Opens the first-run welcome again. */
   showWelcome(): void;
 }

@@ -415,7 +415,7 @@ Answers go into §9 of this document.
 | 0. Setup | Overwolf app proposal (https://dev.overwolf.com/app-idea-form/) and approval → Dev Console API key. apexlegendsstatus API key. Windows: Node 22.12+, Git. | 1 evening + **waiting for Overwolf approval** |
 | 1. Recorder spike | ~~Build the recorder~~ (done: `src/`, 10 tests passing, untested against the real game). Run it on Windows and play ~10 ranked matches. | Play time |
 | 2. PoC stats | Silver/gold, validated against in-game summaries. **First version done (2026-09-24):** `src/build-dataset.ts`, tested on 23 real matches (kills/assists equal the final scoreboard; per-weapon totals add up). Still to check against in-game summaries. | 1–2 weekends |
-| 3. UI | Dashboard window + in-game overlay. **Dashboard done (2026-09-24):** Overview, Squads, Matches (expandable details), Legends, Weapons, sharing one filter bar; shows the recordings (sample data only when there are none); `npm run app:preview`. Still to do: Settings, overlay, and the backlog in §12. | 2–3 weekends |
+| 3. UI | Dashboard window + in-game overlay. **Dashboard done (2026-09-24):** Overview, Squads, Matches (expandable details), Legends, Weapons, sharing one filter bar; shows the recordings (sample data only when there are none); `npm run app:preview`. Still to do: Settings, overlay, and whichever ideas in §12 get signed off. | 2–3 weekends |
 
 Workflow: code on the Mac → push to a private GitHub repo → pull on Windows
 to run. Recorded JSONL files come back to the Mac (copied into `recordings/`,
@@ -661,7 +661,7 @@ name and GEP players by platform ID; they are linked with "merge players".
 
 ---
 
-## 12. Dashboard backlog (agreed 2026-09-24)
+## 12. Dashboard: rules, popups and ideas
 
 ### Rules for every feature
 The dashboard has to stay focused, so a feature that adds nothing is easy to
@@ -726,8 +726,8 @@ overlay package (`src/game-overlay.ts`): the app injects when Apex launches,
 and once the game has reported its window size the cards go in an overlay
 window with `passthrough` (every click and key stays with the game), `topMost`
 and `strictToGameWindow`. So they show in fullscreen and never take focus.
-Until then, and whenever injection fails (elevated Apex: the UAC helper isn't
-built yet; Apex's overlay switched off by Overwolf), they use the old plain
+Until then, and whenever injection fails (Apex's overlay switched off by
+Overwolf; elevated Apex without the overlay's helper), they use the old plain
 always-on-top window, which shows over the game only in borderless windowed
 mode. The old window stays as that fallback until the overlay has proven
 itself. The overlay's `game-launched` names a game by `id` and `classId`, and
@@ -737,6 +737,19 @@ and matched as both 21566 and 215661 until a log says which.
 overlay is off. Card positions inside the game assume the overlay window's
 bounds are in game-window coordinates (unverified: docs/next-steps.md item 3).
 `popup:live` and `popup:preview` still use the plain window only.
+
+**Elevated Apex.** An Apex run as administrator only lets the overlay in once
+Overwolf's helper is installed (`installHighElevationHelper()`, a UAC prompt).
+We never prompt on our own: UAC would take focus from the game at launch. After
+the injection error, the title bar says "Cards can't show in the game" and
+Settings → Popups offers an Allow button; once installed, the overlay retries
+the running game (`requestGameInjection`) and injects into elevated games by
+itself from then on.
+
+`npm run overlay:check` plays a game session against a fake overlay
+(`src/fake-overlay.ts`) with the real card window and hotkeys: where each card
+goes, the hotkeys moving in and out of the game, the helper. It runs on macOS;
+only Overwolf's own behaviour needs Windows.
 
 **Hotkeys** (`src/hotkeys.ts`, Settings → Hotkeys; Overwolf asks that overlays
 are easy to dismiss and that users are told the keys). Two actions: **hide the
@@ -750,7 +763,25 @@ the game. The two actions can't share a key (Settings refuses it,
 the reminder. A "show the last card again" key was left out until the basics
 are tried in a match.
 
-### Planned
+### Status (built 2026-09-28)
+The title bar's top right says one thing, the most serious first
+(`statusLine` in `src/ui/game-status.ts`): Overwolf has Apex's game data off
+(red); Apex runs as administrator so GEP won't talk to us (red); game data
+didn't start (red); cards can't go in the game (amber, links to Settings);
+Overwolf reports some Apex features down (amber, which ones in the tooltip);
+recording (green); Apex found, starting; waiting for Apex (grey). The tooltip
+has the longer story. Overwolf's part comes from its public
+`21566_prod.json`, read every 10 minutes (the file lags about 10 minutes
+anyway) and when Apex starts; a failed read keeps the last state, so a network
+blip doesn't hide an outage. A feature that's down while the overall state is
+green (e.g. `location`) isn't worth a warning. Overwolf asks for this
+(product-guidelines.md §4.4); the 2026-09-29 Apex disable is the case it's for.
+
+### Ideas (not signed off)
+Brainstorm material, not a plan. A row marked **done** was agreed and built;
+every other row is an idea to discuss first, and nothing here gets built until
+it's signed off. Once it is, it moves to docs/next-steps.md.
+
 | Where | Feature |
 |---|---|
 | Overview | ~~Redesign~~ **done (2026-09-25)**: the first screen answers where I stand, how the last session went and whether I'm getting better. **Your rank** (badge, RP, progress to the next division, season peak and games; from the game's season stats, so it shows before any match is recorded, and ignores the filters). **Last session** (a 2-hour break starts a new one: matches, net RP, wins, best and worst game). **RP, match by match** on the rank bands (one account) or as a running total (several), sessions marked, RP from games not recorded shown as a dashed step and in the title (it explained a −50 net against a rising line). **Recent matches** (last 5). **Six tiles, each against a fair reference** (`comparisonFor`): 7/30/90 days and custom ranges against the period just before, same length and filters (5+ recorded matches, else nothing); Season against last season as the game counts it (ranked only); All time against nothing. Comparing with the current season was dropped: the selection is part of it, and a 30-day range can start in the previous season. "≈" within 3%. A new install (season stats but no matches yet) sees its own rank and seasons, not sample data: lobby-only stats go to the account by its `me.name` |
@@ -770,7 +801,7 @@ are tried in a match.
 | Settings | Choose the recordings folder (e.g. a OneDrive folder, for backup and several PCs). `main.ts` already reads `APEX_SQUADS_DATA_DIR` (default `%APPDATA%\Apex Squads`, the app's userData folder as in Overwolf's storage guide; moved from `Documents\ApexTracker` on 2026-09-28) |
 | Settings | CSV export of the gold facts |
 
-### After the spike (needs `location`, §7 Q11)
+### Ideas that need `location` (not signed off; §7 Q11)
 - **Maps** tab: map picker (defaults to the current ranked map) with layer
   toggles instead of subtabs: **Deaths** (dots, not a smoothed heatmap, at
   personal sample sizes) and **Drops** (position at `landed`, crossed with

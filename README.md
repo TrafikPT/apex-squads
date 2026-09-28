@@ -118,6 +118,17 @@ testing while Apex's overlay is off. Hotkeys (Settings → Hotkeys): F9 hides th
 card, F10 turns cards off and on; the log says whether they were registered in
 the game or globally. See DESIGN.md §12.
 
+```bash
+npm run overlay:check   # the card window and hotkeys against a fake overlay, any OS
+```
+Plays a game session (Apex starts and closes, the hotkeys, Apex as
+administrator) and prints PASS/FAIL per check. `APEX_CHECK_SHOTS=<folder>` also
+saves the in-game card as a PNG.
+
+The title bar's status reads Overwolf's live game events status for Apex, in
+the preview too. `APEX_UI_STATUS='{"game":"recording","cards":"needs-helper"}'`
+sets it instead, for screenshots (the fields are in `src/ui/game-status.ts`).
+
 ### Live, from the Overwolf client's log (before we had Dev Mode)
 Superseded by `npm start`; kept for replaying old logs. While another Apex
 app (e.g. TRN's tracker) runs, the Overwolf client logs

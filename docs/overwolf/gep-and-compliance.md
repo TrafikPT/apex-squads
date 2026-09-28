@@ -275,6 +275,13 @@ Example response, verbatim from the docs (it is not valid JSON as printed: the b
 
 Shape to expect: `{ game_id, state, features: [ { name, state, keys: [ { name, type, state, category? } ] } ] }`. From the example, `type` 0 goes with events and `type` 1 with an info key (the one with `"category": "game_info"`); the docs don't define `type` explicitly.
 
+**The live file (fetched 2026-09-28, our own use)** has more fields than the docs show:
+- Top level: `game_id`, `name` ("Apex Legends"), `state`, `disabled`, **`disabled_electron`**, `published`, `is_vgep`, `vgep_prefix`, **`min_gep_version`** and **`min_gep_version_electron`** (both "312.4.3" for Apex), and `features`. `disabled_electron` suggests a disable can apply to ow-electron apps only; treat either flag as "off". The per-game file had no `maintenance_msg` that day (all green); the all-games file shows one on disabled games.
+- Feature: `name`, `state`, `published`, `keys`.
+- Key: `name`, `type`, `state`, `is_index`, `category` (null for events), `sample_data` (a JSON string or null), **`status_comment`** (null that day; presumably Overwolf's note on a down key), `published`, `is_vgep`.
+- That day (the eve of the 2026-09-29 disable): state 1 and every one of the 17 features green, `location` and `ring` included.
+- The app reads it every 10 minutes and when Apex starts (`src/game-status.ts`) for the title bar's status (DESIGN.md §12).
+
 ### Status health page
 
 The "Game events status health" page says "Pick any game to see its full events list", recommends communicating errors and warnings to users, and points to the all-games endpoint above. The per-game status widget did not load in the downloaded copy.
@@ -1003,7 +1010,7 @@ From the Discord (#issues-and-requests, staff): Overwatch enemy heroes are delay
 
 - Register features as early as possible after launch; if the app starts mid-match, show the user that data may be incomplete ("Run order matters!").
 - Treat `null` info values as resets between matches.
-- Poll `https://game-events-status.overwolf.com/21566_prod.json` for the planned Settings > Diagnostics (DESIGN 12) and show yellow/red states to the user, as the docs strongly recommend. The Apex disable from 2026-09-29 (section 5) is exactly this case: without it, users see a dashboard that silently stops recording.
+- Poll `https://game-events-status.overwolf.com/21566_prod.json` and show yellow/red states to the user, as the docs strongly recommend. Done 2026-09-28: the dashboard's title bar (`src/game-status.ts`, DESIGN.md §12). The Apex disable from 2026-09-29 (section 5) is exactly this case: without it, users see a dashboard that silently stops recording.
 - `kill_feed` depends on the in-game "Obituaries" setting (the planned Obituaries check in DESIGN 12 matches the docs).
 - Our damage will always read higher than the in-game number (armor damage included).
 

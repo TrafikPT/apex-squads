@@ -7,11 +7,14 @@ import { BrowserWindow, app, ipcMain, shell } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildDataset } from './build-dataset';
+import type { HelperResult } from './game-overlay';
+import type { GameStatusTracker } from './game-status';
 import { PopupWindow } from './popup-window';
 import { IN_MATCH_PHASES } from './recorder';
 import { readRecordings } from './recordings';
 import { loadSettings, saveSettings, settingsFile } from './settings-store';
 import type { Settings } from './ui/app-settings';
+import { INITIAL_STATUS } from './ui/game-status';
 import type { Popup } from './ui/popup-card';
 
 const TITLE_BAR_HEIGHT = 40;
@@ -38,12 +41,19 @@ const TEST_POPUP: Popup = {
 };
 let testPopups: PopupWindow | null = null;
 
-/**
- * @param recordingsDirs where the dashboard's data comes from (every .jsonl in them).
- * @param popups the app's card window, so the test card goes where real ones do
- *   (in the game when the overlay is there) and the hotkeys work on it.
- */
-export function createMainWindow(recordingsDirs: string[], popups?: PopupWindow): BrowserWindow {
+/** What the real app (main.ts) lends the dashboard; the previews go without. */
+export interface AppServices {
+  /** The app's card window, so the test card goes where real ones do (in the game when the overlay is there) and the hotkeys work on it. */
+  popups?: PopupWindow;
+  /** The title bar's status. */
+  status?: GameStatusTracker;
+  /** Settings' button for elevated Apex (src/game-overlay.ts). */
+  installOverlayHelper?: () => Promise<HelperResult>;
+}
+
+/** @param recordingsDirs where the dashboard's data comes from (every .jsonl in them). */
+export function createMainWindow(recordingsDirs: string[], services: AppServices = {}): BrowserWindow {
+  const { popups, status } = services;
   ipcMain.removeHandler('apex:settings');
   ipcMain.handle('apex:settings', () => loadSettings());
   ipcMain.removeHandler('apex:save-settings');
@@ -53,6 +63,11 @@ export function createMainWindow(recordingsDirs: string[], popups?: PopupWindow)
     testPopups ??= popups ?? new PopupWindow();
     testPopups.show(TEST_POPUP, true);
   });
+
+  ipcMain.removeHandler('apex:status');
+  ipcMain.handle('apex:status', () => status?.current ?? INITIAL_STATUS);
+  ipcMain.removeHandler('apex:install-overlay-helper');
+  ipcMain.handle('apex:install-overlay-helper', () => services.installOverlayHelper?.() ?? 'unavailable');
 
   ipcMain.removeHandler('apex:open-recordings');
   ipcMain.handle('apex:open-recordings', async () => {
@@ -117,6 +132,12 @@ export function createMainWindow(recordingsDirs: string[], popups?: PopupWindow)
   win.loadFile(path.join(__dirname, '..', 'ui', 'index.html'), { query });
   win.once('ready-to-show', () => win.show());
   watchForFinishedMatches(recordingsDirs, win);
+  if (status) {
+    const stop = status.onChange((next) => {
+      if (!win.isDestroyed()) win.webContents.send('apex:status-changed', next);
+    });
+    win.on('closed', stop);
+  }
   noFocusInMatches(recordingsDirs, win);
 
   // Dev aid: APEX_UI_SCREENSHOT=out.png renders the window to a file and quits.

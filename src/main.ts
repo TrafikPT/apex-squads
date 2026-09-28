@@ -11,6 +11,7 @@ import type { OverwolfGameEventPackage } from '@overwolf/ow-electron-packages-ty
 import { AccountIdFile } from './account-ids';
 import { dataDir } from './data-dir';
 import { GameOverlay } from './game-overlay';
+import { GameStatusTracker } from './game-status';
 import { Hotkeys } from './hotkeys';
 import { JsonlSink } from './jsonl-sink';
 import { PlayerHistory } from './player-history';
@@ -54,6 +55,9 @@ const recorder = new Recorder(sessionId, tee, rankClient, systemClock, new Accou
 // The cards go inside the game once Overwolf's overlay is in it; a plain window until then.
 const overlay = new GameOverlay(log);
 const popupWindow = new PopupWindow(overlay);
+// The title bar's status: recording, Overwolf's game data health, where the cards go.
+const status = new GameStatusTracker(log);
+overlay.onCardsPlaceChanged((cards) => status.set({ cards }));
 popups = new PopupService({
   history,
   show: (popup) => {
@@ -93,6 +97,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
+    status.startPolling();
     createTray({ openDashboard, quit: () => app.quit() });
     // Started by the login item: wait in the tray until the user opens the dashboard.
     if (!startedHidden()) openDashboard();
@@ -124,7 +129,11 @@ function openDashboard(): void {
     dashboard.focus();
     return;
   }
-  dashboard = createMainWindow([recordingsDir], popupWindow);
+  dashboard = createMainWindow([recordingsDir], {
+    popups: popupWindow,
+    status,
+    installOverlayHelper: () => overlay.installHelper(),
+  });
 }
 
 function setupGep(gep: OverwolfGameEventPackage): void {
@@ -134,6 +143,8 @@ function setupGep(gep: OverwolfGameEventPackage): void {
     recorder.lifecycle('game_detected', { game_id: gameId, name });
     if (gameId !== APEX_GAME_ID) return;
     log(`Apex Legends detected (${name}); enabling game events.`);
+    status.set({ game: 'starting' });
+    void status.refreshEvents();
     event.enable();
     void registerFeatures(gep);
   });
@@ -141,6 +152,7 @@ function setupGep(gep: OverwolfGameEventPackage): void {
   gep.on('elevated-privileges-required', (_e, gameId, name) => {
     log(`${name} runs as administrator: run this recorder as administrator too.`);
     recorder.lifecycle('elevated_privileges_required', { game_id: gameId, name });
+    if (gameId === APEX_GAME_ID) status.set({ game: 'needs-admin' });
   });
 
   gep.on('new-info-update', (_e, gameId, data) => {
@@ -165,6 +177,7 @@ function setupGep(gep: OverwolfGameEventPackage): void {
   gep.on('game-exit', (_e, gameId, gameName) => {
     log(`Game exited: ${gameName}`);
     recorder.lifecycle('game_exit', { game_id: gameId, name: gameName });
+    if (gameId === APEX_GAME_ID) status.set({ game: 'none' });
   });
 }
 
@@ -182,6 +195,7 @@ async function registerFeatures(gep: OverwolfGameEventPackage): Promise<void> {
       const features = await gep.getFeatures(APEX_GAME_ID);
       log(`Subscribed to all features; Apex supports ${features.length}: ${features.join(', ')}.`);
       recorder.lifecycle('features_set', { attempt, features });
+      status.set({ game: 'recording' });
       await snapshotInfo(gep);
       return;
     } catch (err) {
@@ -191,6 +205,7 @@ async function registerFeatures(gep: OverwolfGameEventPackage): Promise<void> {
     }
   }
   log('Giving up on setRequiredFeatures; no game data will be recorded this session.');
+  status.set({ game: 'no-data' });
 }
 
 /** Full current state; lets the views recover values set before the recorder started. */

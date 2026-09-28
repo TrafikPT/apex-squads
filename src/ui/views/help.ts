@@ -10,11 +10,13 @@ const FAQ: [string, string][] = [
   ["Why wasn't my match recorded?",
     'Apex Squads only records while it runs, so start it before Apex: it can start with Windows and wait in the tray. ' +
     'A match counts once it ends; one you leave early may be left out. After an Apex update, Overwolf sometimes pauses ' +
-    'its game data for Apex for a while, and matches played then can\'t be recorded.'],
+    'its game data for Apex for a while, and matches played then can\'t be recorded. The top right of this window ' +
+    'says when that happens, and when Apex runs as administrator, which stops the recording too (start Apex normally, ' +
+    'or run Apex Squads as administrator as well).'],
   ["The kill and death cards don't show over the game.",
     'The cards show inside the game through Overwolf\'s overlay, a few seconds after Apex starts. If the overlay ' +
-    "can't get into Apex (for example when Apex runs as administrator, or while Overwolf has Apex's overlay switched " +
-    'off), the cards are a separate window instead, which Windows shows over Apex only in borderless window mode ' +
+    "can't get into Apex (while Overwolf has Apex's overlay switched off, or when Apex runs as administrator: then " +
+    'Settings → Popups has an Allow button, and Windows asks for permission once), the cards are a separate window instead, which Windows shows over Apex only in borderless window mode ' +
     '(Apex: Settings → Video → Display Mode). Also check the cards aren\'t turned off with the hotkey (F10 by ' +
     'default). Which cards show, where, for how long and the hotkeys are in Settings.'],
   ['Why do some players show as a legend name and four digits?',
@@ -25,7 +27,7 @@ const FAQ: [string, string][] = [
   ['Where is my data, and what leaves this PC?',
     'Everything is saved on this PC, in %APPDATA%\\Apex Squads: a file of game events per session, and your settings. ' +
     "Besides the Overwolf services the app runs on, the only thing it sends is a lookup of your own account's rank on " +
-    'apexlegendsstatus.com.'],
+    "apexlegendsstatus.com. It also reads Overwolf's public status of its Apex game data, which sends nothing about you."],
 ];
 
 /** Newest first. Written for players: what changed for them, not how. */
@@ -38,6 +40,7 @@ const RELEASES: { version: string; date: string; notes: string[] }[] = [
       'Seasons: your rank and totals season by season, from the game\'s own stats.',
       'Kill, death and lobby cards during matches, inside the game, with settings for which show, where and for how long.',
       'Hotkeys: F9 hides a card, F10 turns cards off and on; change them in Settings.',
+      "The top right of the window says whether your matches are being recorded, and when Overwolf's game data for Apex is down.",
     ],
   },
 ];
