@@ -81,7 +81,7 @@ async function run(): Promise<void> {
   });
   const overlay = new GameOverlay(() => undefined);
   const popups = new PopupWindow(overlay);
-  const hotkeys = new Hotkeys(overlay, { hideCard: () => popups.hideNow(), toggleCards: () => popups.toggleCards() }, () => undefined);
+  const hotkeys = new Hotkeys(overlay, globalShortcut, { hideCard: () => popups.hideNow(), toggleCards: () => popups.toggleCards() }, () => undefined);
   overlay.onGameInjected(() => hotkeys.apply(loadSettings()));
   overlay.onGameExit(() => hotkeys.apply(loadSettings()));
   overlay.attach(fake.api);

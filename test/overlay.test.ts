@@ -118,7 +118,7 @@ test('overlay: installing the helper before any overlay is unavailable', async (
 test('hotkeys: in the game they are overlay hotkeys that pass the key on, and fire their actions', () => {
   const { fake, overlay } = setup();
   const done: string[] = [];
-  const hotkeys = new Hotkeys(overlay, { hideCard: () => done.push('hide'), toggleCards: () => done.push('toggle') }, () => undefined);
+  const hotkeys = new Hotkeys(overlay, { register: () => false, unregister: () => undefined }, { hideCard: () => done.push('hide'), toggleCards: () => done.push('toggle') }, () => undefined);
   fake.launch(APEX);
   hotkeys.apply(DEFAULT_SETTINGS);
   assert.deepEqual(fake.hotkeys.all().map((h) => [h.name, h.keyCode, h.passthrough]), [['cards-hide', 'F9', true], ['cards-toggle', 'F10', true]]);

@@ -4,7 +4,7 @@
  * is closed. Logs go to the terminal. Windows only (GEP requirement); use
  * preview-main.ts to work on the UI elsewhere.
  */
-import { app, type BrowserWindow } from 'electron';
+import { app, globalShortcut, type BrowserWindow } from 'electron';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import type { OverwolfGameEventPackage } from '@overwolf/ow-electron-packages-types';
@@ -102,7 +102,7 @@ if (!app.requestSingleInstanceLock()) {
     // Started by the login item: wait in the tray until the user opens the dashboard.
     if (!startedHidden()) openDashboard();
     // Hotkeys follow the settings, and move into the game with the overlay and back out.
-    const hotkeys = new Hotkeys(overlay, { hideCard: () => popupWindow.hideNow(), toggleCards: () => popupWindow.toggleCards() }, log);
+    const hotkeys = new Hotkeys(overlay, globalShortcut, { hideCard: () => popupWindow.hideNow(), toggleCards: () => popupWindow.toggleCards() }, log);
     hotkeys.apply(loadSettings());
     onSettingsSaved((settings) => hotkeys.apply(settings));
     overlay.onGameInjected(() => hotkeys.apply(loadSettings()));

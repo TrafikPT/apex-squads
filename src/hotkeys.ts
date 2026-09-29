@@ -6,7 +6,7 @@
  * saw overlay hotkeys never fire (docs/overwolf/api-reference.md): if that
  * happens here, the log says which kind was registered.
  */
-import { globalShortcut } from 'electron';
+import type { GlobalShortcut } from 'electron';
 import type { GameOverlay } from './game-overlay';
 import type { Hotkey, Settings } from './ui/app-settings';
 import { hotkeyLabel } from './ui/app-settings';
@@ -26,6 +26,8 @@ export class Hotkeys {
 
   constructor(
     private readonly overlay: GameOverlay,
+    /** Electron's globalShortcut, passed in so tests can load this without Electron's binary. */
+    private readonly globalShortcut: Pick<GlobalShortcut, 'register' | 'unregister'>,
     private readonly actions: HotkeyActions,
     private readonly log: (...args: unknown[]) => void,
   ) {}
@@ -50,7 +52,7 @@ export class Hotkeys {
           this.overlayNames.push(id);
         } else {
           const accelerator = acceleratorFor(h);
-          if (globalShortcut.register(accelerator, action)) this.accelerators.push(accelerator);
+          if (this.globalShortcut.register(accelerator, action)) this.accelerators.push(accelerator);
           else this.log(`Hotkey ${hotkeyLabel(h)} is taken by another app; pick another in Settings.`);
         }
       } catch (err) {
@@ -72,7 +74,7 @@ export class Hotkeys {
     }
     this.overlayNames = [];
     this.registeredWith = null;
-    for (const accelerator of this.accelerators) globalShortcut.unregister(accelerator);
+    for (const accelerator of this.accelerators) this.globalShortcut.unregister(accelerator);
     this.accelerators = [];
   }
 }
